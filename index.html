@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-left-handed="false">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pocket Dystopia</title>
+  <meta name="description" content="Roll a satirical dystopian story seed. Lock traits, re-roll sections, share your build.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Pocket Dystopia">
+  <meta property="og:description" content="Roll a satirical dystopian story seed. Lock traits, re-roll sections, share your build.">
+  <meta property="og:image" content="https://classwith.nicojan.com/pocket-dystopia/og-image-v1.png">
+  <meta property="og:url" content="https://classwith.nicojan.com/pocket-dystopia/">
+  <meta property="twitter:card" content="summary_large_image">
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <!-- Material Symbols Outlined -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+
+  <!-- html2canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+
+  <!-- App -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+
+  <!-- ===== INTRO SCREEN ===== -->
+  <div id="intro-screen" class="intro-screen" role="main">
+    <h1 class="text-display">POCKET DYSTOPIA</h1>
+    <p class="intro-subtitle text-body">Roll a satirical dystopian seed. Lock what you love, re-roll the rest.</p>
+
+    <div class="intro-load">
+      <input type="text" id="load-input" placeholder="Paste a build code to restore..." aria-label="Build code input">
+      <button class="btn-secondary" id="load-btn" onclick="loadBuildFromInput()">
+        <span class="material-symbols-outlined">upload</span>
+        Load Build
+      </button>
+      <div class="error-msg" id="load-error" aria-live="polite"></div>
+    </div>
+
+    <div class="die-container" id="die-container" onclick="rollDie()" role="button" tabindex="0" aria-label="Roll the die to generate a story seed">
+      <div class="die-wrapper">
+        <div class="die-shape">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="60,5 110,35 110,85 60,115 10,85 10,35" stroke="var(--accent-cyan)" stroke-width="2" fill="var(--bg-elevated)" opacity="0.9"/>
+            <polygon points="60,5 110,35 110,85 60,115 10,85 10,35" stroke="var(--accent-cyan)" stroke-width="1" fill="none" opacity="0.4" stroke-dasharray="4 4"/>
+          </svg>
+          <span class="die-num" id="die-num">20</span>
+        </div>
+      </div>
+      <p class="die-hint">tap to roll</p>
+    </div>
+
+    <div class="footer">
+      built with love by Nico Jan
+    </div>
+  </div>
+
+  <!-- ===== RESULTS SCREEN ===== -->
+  <div id="results-screen" class="results-screen" aria-live="polite">
+    <header class="top-bar app-container">
+      <div class="top-bar-left">
+        <span class="top-bar-title">POCKET DYSTOPIA</span>
+      </div>
+      <div class="top-bar-right">
+        <button class="btn-icon" id="btn-undo" onclick="undo()" aria-label="Undo last roll" disabled>
+          <span class="material-symbols-outlined">undo</span>
+        </button>
+        <button class="btn-icon" id="btn-copy" onclick="copyBuild()" aria-label="Copy build to clipboard">
+          <span class="material-symbols-outlined">content_copy</span>
+        </button>
+        <button class="btn-icon" id="btn-save" onclick="saveScreenshot()" aria-label="Save screenshot">
+          <span class="material-symbols-outlined">download</span>
+        </button>
+        <button class="btn-icon" id="btn-share" onclick="openShareModal()" aria-label="Share build code">
+          <span class="material-symbols-outlined">share</span>
+        </button>
+        <button class="btn-icon" id="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">
+          <span class="material-symbols-outlined" id="theme-icon">light_mode</span>
+        </button>
+        <button class="btn-icon" id="btn-left-hand" onclick="toggleLeftHanded()" aria-label="Toggle left-handed mode">
+          <span class="material-symbols-outlined">back_hand</span>
+        </button>
+        <button class="btn-icon" id="btn-reset" onclick="confirmReset()" aria-label="Reset build">
+          <span class="material-symbols-outlined">restart_alt</span>
+        </button>
+        <button class="btn-primary" id="btn-roll-all" onclick="rollDie()" aria-label="Roll all sections">
+          <span class="material-symbols-outlined">casino</span>
+          Roll
+        </button>
+      </div>
+    </header>
+
+    <main id="main-content" class="app-container">
+      <div class="controls-bar">
+        <div class="view-toggle" role="group" aria-label="View mode">
+          <button id="btn-expanded" class="active" onclick="setView('expanded')" aria-pressed="true">Expanded</button>
+          <button id="btn-compressed" onclick="setView('compressed')" aria-pressed="false">Compressed</button>
+        </div>
+        <div class="mood-select">
+          <span class="material-symbols-outlined" style="color: var(--text-secondary)">tune</span>
+          <select id="mood-filter" onchange="setMood(this.value)" aria-label="Mood filter">
+            <option value="all">All Moods</option>
+            <option value="corporate">Corporate Dystopia</option>
+            <option value="post-apocalyptic">Post-Apocalyptic</option>
+            <option value="ai-takeover">AI Takeover</option>
+            <option value="political">Political Satire</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="results-container" class="cards-grid">
+        <!-- Cards are rendered by JS -->
+      </div>
+    </main>
+
+    <div class="footer app-container">
+      built with love by Nico Jan
+    </div>
+  </div>
+
+  <!-- ===== SHARE MODAL ===== -->
+  <div id="share-modal" class="modal-overlay" role="dialog" aria-labelledby="modal-title" aria-modal="true">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title">SAVE YOUR BUILD</h2>
+        <button class="btn-icon" onclick="closeShareModal()" aria-label="Close modal">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <p class="text-caption" style="color: var(--text-secondary); margin-bottom: var(--space-md);">Your build code:</p>
+      <textarea id="share-code" readonly aria-label="Build code"></textarea>
+      <div class="modal-actions">
+        <button class="btn-primary" onclick="copyShareCode()">
+          <span class="material-symbols-outlined">content_copy</span>
+          Copy Code
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CONFIRM DIALOG ===== -->
+  <div id="confirm-overlay" class="confirm-overlay">
+    <div class="confirm-dialog">
+      <p id="confirm-msg">Reset everything? This will clear your saved build.</p>
+      <div class="confirm-actions">
+        <button class="btn-secondary" onclick="closeConfirm()">Cancel</button>
+        <button class="btn-primary" id="confirm-yes" onclick="executeReset()">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast" class="toast" aria-live="assertive"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
