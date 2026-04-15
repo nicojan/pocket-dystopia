@@ -31,32 +31,31 @@
   <!-- ===== INTRO SCREEN ===== -->
   <div id="intro-screen" class="intro-screen" role="main">
     <h1 class="text-display">POCKET DYSTOPIA</h1>
-    <p class="intro-subtitle text-body">Roll a satirical dystopian seed. Lock what you love, re-roll the rest.</p>
-
-    <div class="intro-load">
-      <input type="text" id="load-input" placeholder="Paste a build code to restore..." aria-label="Build code input">
-      <button class="btn-secondary" id="load-btn" onclick="loadBuildFromInput()">
-        <span class="material-symbols-outlined">upload</span>
-        Load Build
-      </button>
-      <div class="error-msg" id="load-error" aria-live="polite"></div>
-    </div>
+    <p class="intro-subtitle text-body">
+      Roll a satirical dystopian seed.<br>
+      Lock what you love.<br>
+      Re-roll the rest.
+    </p>
 
     <div class="die-container" id="die-container" onclick="rollDie()" role="button" tabindex="0" aria-label="Roll the die to generate a story seed">
       <div class="die-wrapper">
-        <div class="die-shape">
-          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <polygon points="60,5 110,35 110,85 60,115 10,85 10,35" stroke="var(--accent-cyan)" stroke-width="2" fill="var(--bg-elevated)" opacity="0.9"/>
-            <polygon points="60,5 110,35 110,85 60,115 10,85 10,35" stroke="var(--accent-cyan)" stroke-width="1" fill="none" opacity="0.4" stroke-dasharray="4 4"/>
-          </svg>
-          <span class="die-num" id="die-num">20</span>
-        </div>
+        <div class="die-shape" id="die-face" aria-hidden="true"></div>
       </div>
       <p class="die-hint">tap to roll</p>
     </div>
 
+    <div class="intro-load">
+      <label for="load-input" class="sr-only">Build code</label>
+      <input type="text" id="load-input" placeholder="Paste a build code to restore..." autocomplete="off" spellcheck="false">
+      <button class="btn-secondary" id="load-btn" onclick="loadBuildFromInput()">
+        <span class="material-symbols-outlined" aria-hidden="true">upload</span>
+        Load
+      </button>
+      <div class="error-msg" id="load-error" role="alert" aria-live="polite"></div>
+    </div>
+
     <div class="footer">
-      built with love by Nico Jan
+      built with <span aria-label="love">♥</span> by <a href="https://nicojan.com" target="_blank" rel="noopener noreferrer" class="footer-link">Nico Jan</a>
     </div>
   </div>
 
@@ -64,33 +63,30 @@
   <div id="results-screen" class="results-screen" aria-live="polite">
     <header class="top-bar app-container">
       <div class="top-bar-left">
-        <span class="top-bar-title">POCKET DYSTOPIA</span>
+        <button class="top-bar-title" type="button" onclick="confirmReset()" aria-label="Reset build and return to the home screen">POCKET DYSTOPIA</button>
       </div>
       <div class="top-bar-right">
         <button class="btn-icon" id="btn-undo" onclick="undo()" aria-label="Undo last roll" disabled>
-          <span class="material-symbols-outlined">undo</span>
+          <span class="material-symbols-outlined" aria-hidden="true">undo</span>
         </button>
         <button class="btn-icon" id="btn-copy" onclick="copyBuild()" aria-label="Copy build to clipboard">
-          <span class="material-symbols-outlined">content_copy</span>
+          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
         </button>
         <button class="btn-icon" id="btn-save" onclick="saveScreenshot()" aria-label="Save screenshot">
-          <span class="material-symbols-outlined">download</span>
+          <span class="material-symbols-outlined" aria-hidden="true">download</span>
         </button>
         <button class="btn-icon" id="btn-share" onclick="openShareModal()" aria-label="Share build code">
-          <span class="material-symbols-outlined">share</span>
+          <span class="material-symbols-outlined" aria-hidden="true">share</span>
         </button>
         <button class="btn-icon" id="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">
-          <span class="material-symbols-outlined" id="theme-icon">light_mode</span>
+          <span class="material-symbols-outlined" id="theme-icon" aria-hidden="true">light_mode</span>
         </button>
-        <button class="btn-icon" id="btn-left-hand" onclick="toggleLeftHanded()" aria-label="Toggle left-handed mode">
-          <span class="material-symbols-outlined">back_hand</span>
-        </button>
-        <button class="btn-icon" id="btn-reset" onclick="confirmReset()" aria-label="Reset build">
-          <span class="material-symbols-outlined">restart_alt</span>
+        <button class="btn-icon" id="btn-left-hand" onclick="toggleLeftHanded()" aria-label="Toggle left-handed mode" aria-pressed="false">
+          <span class="material-symbols-outlined" aria-hidden="true">back_hand</span>
         </button>
         <button class="btn-primary" id="btn-roll-all" onclick="rollDie()" aria-label="Roll all sections">
-          <span class="material-symbols-outlined">casino</span>
-          Roll
+          <span class="roll-die-icon" id="roll-die-icon" aria-hidden="true"></span>
+          <span class="sr-only">Roll</span>
         </button>
       </div>
     </header>
@@ -102,8 +98,9 @@
           <button id="btn-compressed" onclick="setView('compressed')" aria-pressed="false">Compressed</button>
         </div>
         <div class="mood-select">
-          <span class="material-symbols-outlined" style="color: var(--text-secondary)">tune</span>
-          <select id="mood-filter" onchange="setMood(this.value)" aria-label="Mood filter">
+          <span class="material-symbols-outlined" aria-hidden="true" style="color: var(--text-secondary)">tune</span>
+          <label for="mood-filter" class="sr-only">Mood filter</label>
+          <select id="mood-filter" onchange="setMood(this.value)">
             <option value="all">All Moods</option>
             <option value="corporate">Corporate Dystopia</option>
             <option value="post-apocalyptic">Post-Apocalyptic</option>
@@ -119,7 +116,7 @@
     </main>
 
     <div class="footer app-container">
-      built with love by Nico Jan
+      built with <span aria-label="love">♥</span> by <a href="https://nicojan.com" target="_blank" rel="noopener noreferrer" class="footer-link">Nico Jan</a>
     </div>
   </div>
 
@@ -128,15 +125,15 @@
     <div class="modal">
       <div class="modal-header">
         <h2 class="modal-title" id="modal-title">SAVE YOUR BUILD</h2>
-        <button class="btn-icon" onclick="closeShareModal()" aria-label="Close modal">
-          <span class="material-symbols-outlined">close</span>
+        <button class="btn-icon" onclick="closeShareModal()" aria-label="Close dialog">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <p class="text-caption" style="color: var(--text-secondary); margin-bottom: var(--space-md);">Your build code:</p>
       <textarea id="share-code" readonly aria-label="Build code"></textarea>
       <div class="modal-actions">
         <button class="btn-primary" onclick="copyShareCode()">
-          <span class="material-symbols-outlined">content_copy</span>
+          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
           Copy Code
         </button>
       </div>
@@ -144,7 +141,7 @@
   </div>
 
   <!-- ===== CONFIRM DIALOG ===== -->
-  <div id="confirm-overlay" class="confirm-overlay">
+  <div id="confirm-overlay" class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-msg">
     <div class="confirm-dialog">
       <p id="confirm-msg">Reset everything? This will clear your saved build.</p>
       <div class="confirm-actions">

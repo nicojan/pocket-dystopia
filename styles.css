@@ -28,6 +28,10 @@
   --border-subtle: #21262D;
   --border-accent: #00E5FF;
 
+  /* Lock state — Apple HIG systemRed (dark) */
+  --accent-lock: #FF453A;
+  --accent-lock-glow: rgba(255, 69, 58, 0.35);
+
   /* Spacing */
   --space-2xs: 2px;
   --space-xs: 4px;
@@ -69,6 +73,9 @@
   --border-default: #D1D5DB;
   --border-subtle: #E5E7EB;
   --border-accent: #0891B2;
+  /* Apple HIG systemRed (light) */
+  --accent-lock: #FF3B30;
+  --accent-lock-glow: rgba(255, 59, 48, 0.25);
 }
 
 /* --- Reset & Base --- */
@@ -84,24 +91,25 @@ html {
 }
 
 body {
-  font: 400 0.875rem/1.5 var(--font-body);
+  /* HIG Body: 17pt */
+  font: 400 1.0625rem/1.47 var(--font-body);
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
 }
 
-/* --- CRT Scanline Overlay --- */
+/* --- CRT Scanline Overlay (subtle; dialed down for readability) --- */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
-  background:
-    linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.25) 50%),
-    linear-gradient(90deg, rgba(255,0,0,0.06), rgba(0,255,0,0.02), rgba(0,0,255,0.06));
-  background-size: 100% 2px, 3px 100%;
+  background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.06) 50%);
+  background-size: 100% 3px;
   pointer-events: none;
   z-index: 999;
+  opacity: 0.6;
+  mix-blend-mode: multiply;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -127,30 +135,41 @@ body::before {
 }
 
 /* --- Typography Classes --- */
+/* HIG-aligned type scale
+   Large Title 34 / Title1 28 / Title2 22 / Title3 20 /
+   Headline 17 bold / Body 17 / Callout 16 / Subhead 15 /
+   Footnote 13 / Caption1 12 / Caption2 11 */
 .text-display {
-  font: 700 clamp(2rem, 6vw, 3.5rem)/1.1 var(--font-display);
-  letter-spacing: 4px;
+  /* Scales between Title1 (28pt) and Large Title (34pt)+ for impact */
+  font: 700 clamp(1.75rem, 5.5vw, 2.5rem)/1.12 var(--font-display);
+  letter-spacing: 3px;
 }
 
 .text-heading {
-  font: 700 1.25rem/1.3 var(--font-display);
+  /* Title3: 20pt */
+  font: 700 1.25rem/1.25 var(--font-display);
 }
 
 .text-subheading {
-  font: 700 0.875rem/1.4 var(--font-body);
+  /* Headline: 17pt bold */
+  font: 700 1.0625rem/1.29 var(--font-body);
   text-transform: uppercase;
+  letter-spacing: 1.5px;
 }
 
 .text-body {
-  font: 400 0.875rem/1.5 var(--font-body);
+  /* Body: 17pt */
+  font: 400 1.0625rem/1.47 var(--font-body);
 }
 
 .text-caption {
-  font: 400 0.75rem/1.4 var(--font-body);
+  /* Footnote: 13pt */
+  font: 400 0.8125rem/1.38 var(--font-body);
 }
 
 .text-micro {
-  font: 400 0.625rem/1.3 var(--font-body);
+  /* Caption2: 11pt */
+  font: 400 0.6875rem/1.36 var(--font-body);
 }
 
 /* --- Material Symbols --- */
@@ -208,7 +227,8 @@ body::before {
   color: var(--text-inverse);
   border: none;
   border-radius: var(--radius-md);
-  font: 700 0.875rem/1.4 var(--font-body);
+  /* HIG Headline: 17pt */
+  font: 700 1.0625rem/1.29 var(--font-body);
   cursor: pointer;
   transition: background 0.2s ease, transform 0.1s ease;
 }
@@ -232,7 +252,8 @@ body::before {
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  font: 700 0.875rem/1.4 var(--font-body);
+  /* HIG Headline: 17pt */
+  font: 700 1.0625rem/1.29 var(--font-body);
   cursor: pointer;
   transition: background 0.2s ease;
 }
@@ -248,6 +269,18 @@ body::before {
   padding: 0 var(--space-lg);
 }
 
+@media (min-width: 600px) {
+  .app-container {
+    padding: 0 var(--space-2xl);
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-container {
+    padding: 0 var(--space-3xl);
+  }
+}
+
 /* --- Intro Screen --- */
 .intro-screen {
   display: flex;
@@ -256,8 +289,12 @@ body::before {
   justify-content: center;
   min-height: 100vh;
   text-align: center;
-  gap: var(--space-xl);
-  padding: var(--space-3xl) var(--space-lg);
+  gap: var(--space-3xl);
+  padding: var(--space-4xl) var(--space-lg);
+}
+
+.intro-subtitle {
+  line-height: 1.8;
 }
 
 .intro-screen .text-display {
@@ -273,28 +310,45 @@ body::before {
 .intro-load {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   width: 100%;
-  max-width: 360px;
+  max-width: 280px;
 }
 
 .intro-load input {
   width: 100%;
-  padding: var(--space-md) var(--space-lg);
+  min-height: 36px;
+  padding: var(--space-sm) var(--space-md);
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font: 400 0.75rem/1.4 var(--font-body);
+  /* HIG Subhead: 15pt — still above iOS zoom threshold of 16pt on inputs? No:
+     use 16px to avoid iOS focus zoom while keeping visual scale small. */
+  font: 400 1rem/1.31 var(--font-body);
 }
 
 .intro-load input::placeholder {
   color: var(--text-tertiary);
+  font-size: 0.8125rem;
+}
+
+.intro-load #load-btn {
+  min-height: 36px;
+  padding: var(--space-xs) var(--space-md);
+  /* HIG Footnote bold: 13pt */
+  font: 700 0.8125rem/1.3 var(--font-body);
+  border-radius: var(--radius-sm);
+}
+
+.intro-load #load-btn .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .intro-load .error-msg {
   color: var(--accent-red);
-  font-size: 0.75rem;
+  /* HIG Caption2: 11pt */
+  font-size: 0.6875rem;
   min-height: 1.2em;
 }
 
@@ -303,6 +357,8 @@ body::before {
   position: relative;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  /* Isolate the CTA with generous breathing room on either side */
+  margin-block: var(--space-2xl);
 }
 
 .die-wrapper {
@@ -331,17 +387,10 @@ body::before {
   animation: glow-pulse 4s ease-in-out infinite;
 }
 
-.die-num {
-  position: absolute;
-  font: 700 1.75rem/1 var(--font-display);
-  color: var(--accent-cyan);
-  text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
-  pointer-events: none;
-}
-
 .die-hint {
   color: var(--text-tertiary);
-  font-size: 0.75rem;
+  /* HIG Footnote: 13pt */
+  font-size: 0.8125rem;
   margin-top: var(--space-sm);
 }
 
@@ -353,6 +402,68 @@ body::before {
 @keyframes glow-pulse {
   0%, 100% { filter: drop-shadow(0 0 15px rgba(0, 229, 255, 0.3)); }
   50% { filter: drop-shadow(0 0 30px rgba(0, 229, 255, 0.6)); }
+}
+
+/* Die face fizzle (CRT static on each face swap) */
+@keyframes die-fizzle {
+  0% {
+    opacity: 0.3;
+    filter: blur(2.5px) brightness(2) hue-rotate(-12deg) contrast(1.3);
+    transform: translateX(-2px) skewX(4deg);
+    clip-path: inset(40% 0 40% 0);
+  }
+  20% {
+    opacity: 1;
+    filter: blur(1px) brightness(1.6) hue-rotate(6deg);
+    transform: translateX(3px);
+    clip-path: inset(0 0 55% 0);
+  }
+  40% {
+    opacity: 0.5;
+    filter: blur(0.5px) brightness(1.2);
+    transform: translateX(-2px);
+    clip-path: inset(25% 0 15% 0);
+  }
+  60% {
+    opacity: 1;
+    filter: brightness(1.25);
+    transform: translateX(1px);
+    clip-path: inset(0);
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+.die-shape.die-fizzle {
+  animation: die-fizzle 260ms steps(8, end) both;
+}
+
+/* Dramatic shake during an active roll */
+@keyframes die-shake {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  10% { transform: translate(-5px, -3px) rotate(-2deg); }
+  20% { transform: translate(6px, 2px) rotate(2deg); }
+  30% { transform: translate(-4px, 4px) rotate(-3deg); }
+  40% { transform: translate(5px, -4px) rotate(2deg); }
+  50% { transform: translate(-6px, 3px) rotate(-2deg); }
+  60% { transform: translate(4px, -2px) rotate(3deg); }
+  70% { transform: translate(-3px, 5px) rotate(-2deg); }
+  80% { transform: translate(6px, 1px) rotate(2deg); }
+  90% { transform: translate(-4px, -3px) rotate(-1deg); }
+}
+
+.die-container.die-shaking {
+  animation: die-shake 110ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .die-shape.die-fizzle,
+  .die-container.die-shaking {
+    animation: none;
+  }
 }
 
 /* Die tumble animations */
@@ -392,7 +503,7 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-md) 0;
+  padding-block: var(--space-md);
   border-bottom: 1px solid var(--border-subtle);
   position: sticky;
   top: 0;
@@ -407,15 +518,68 @@ body::before {
 }
 
 .top-bar-title {
+  /* Reset button-specific defaults so it visually matches a logo */
+  appearance: none;
+  background: none;
+  border: none;
+  padding: var(--space-xs) var(--space-sm);
+  margin: 0;
+  cursor: pointer;
   font: 700 1rem/1 var(--font-display);
   color: var(--accent-cyan);
   letter-spacing: 2px;
+  border-radius: var(--radius-sm);
+  transition: opacity 0.2s ease, text-shadow 0.2s ease;
 }
+
+.top-bar-title:hover {
+  text-shadow: 0 0 12px rgba(0, 229, 255, 0.45);
+}
+
+.top-bar-title:active {
+  opacity: 0.8;
+}
+
+/* --- Screen-reader-only utility --- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Roll button die icon (cycling d6 faces) --- */
+.roll-die-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.roll-die-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.btn-primary .roll-die-icon { color: var(--text-inverse); }
 
 .top-bar-right {
   display: flex;
   align-items: center;
   gap: var(--space-2xs);
+}
+
+.top-bar-right .btn-icon {
+  min-width: 36px;
+  min-height: 36px;
+  padding: var(--space-xs);
 }
 
 /* Left-handed mode */
@@ -466,7 +630,8 @@ body::before {
   background: none;
   border: none;
   color: var(--text-secondary);
-  font: 700 0.75rem/1.4 var(--font-body);
+  /* HIG Subhead: 15pt */
+  font: 700 0.9375rem/1.33 var(--font-body);
   cursor: pointer;
   min-height: 44px;
   transition: background 0.2s ease, color 0.2s ease;
@@ -484,12 +649,21 @@ body::before {
 }
 
 .mood-select select {
+  /* Strip native chrome so we can size padding consistently */
+  appearance: none;
+  -webkit-appearance: none;
   padding: var(--space-sm) var(--space-lg);
-  background: var(--bg-elevated);
+  /* Extra right padding = space for our custom chevron + matching gutter */
+  padding-right: calc(var(--space-lg) + 20px);
+  background-color: var(--bg-elevated);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'><path d='M2 4l4 4 4-4' stroke='%238B949E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right var(--space-lg) center;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font: 400 0.75rem/1.4 var(--font-body);
+  /* HIG Subhead: 15pt */
+  font: 400 0.9375rem/1.33 var(--font-body);
   min-height: 44px;
   cursor: pointer;
 }
@@ -541,7 +715,12 @@ body::before {
 }
 
 .card.locked {
-  border-color: var(--accent-cyan-dim);
+  border-color: var(--accent-lock);
+  box-shadow: 0 0 0 1px var(--accent-lock), 0 0 16px var(--accent-lock-glow);
+}
+
+.card.locked .lock-icon {
+  color: var(--accent-lock);
 }
 
 .card-header {
@@ -555,17 +734,39 @@ body::before {
 }
 
 .card-header-title {
-  font: 700 0.875rem/1.4 var(--font-body);
+  /* Reset button defaults — still reads as a heading visually */
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  /* HIG Headline: 17pt */
+  font: 700 1.0625rem/1.29 var(--font-body);
   text-transform: uppercase;
   letter-spacing: 2px;
   color: var(--accent-cyan);
   flex: 1;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .card-header-actions {
   display: flex;
   align-items: center;
   gap: var(--space-2xs);
+}
+
+.card-header-actions .btn-icon {
+  min-width: 32px;
+  min-height: 32px;
+  padding: var(--space-xs);
+}
+
+.card-header-actions .btn-icon .material-symbols-outlined {
+  font-size: 18px;
 }
 
 .card-content {
@@ -587,7 +788,8 @@ body::before {
 .card-summary {
   padding: 0 var(--space-lg) var(--space-lg);
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  /* HIG Subhead: 15pt */
+  font-size: 0.9375rem;
   display: none;
 }
 
@@ -600,14 +802,29 @@ body::before {
   display: flex;
   align-items: flex-start;
   gap: var(--space-sm);
-  padding: var(--space-sm) 0;
+  padding: var(--space-xs) 0;
   border-left: 2px solid transparent;
   padding-left: var(--space-sm);
   transition: border-color 0.2s ease;
+  min-height: 28px;
+}
+
+/* Keep the prefix / label visually on the first text line even when
+   the trait wraps to multiple lines. We match the *pixel* line-height of the
+   17pt body text so the smaller 13pt label glyphs center optically within
+   the same line box as the body text. */
+.trait-prefix,
+.trait-label {
+  line-height: 1.5625rem; /* = 17px × 1.47, matches .trait-text line box */
 }
 
 .trait-line.trait-locked {
-  border-left-color: var(--accent-cyan-dim);
+  border-left-color: var(--accent-lock);
+  border-left-width: 2px;
+}
+
+.trait-line.trait-locked .trait-lock {
+  color: var(--accent-lock);
 }
 
 .trait-prefix {
@@ -627,13 +844,25 @@ body::before {
   font-weight: 700;
   flex-shrink: 0;
   text-transform: uppercase;
-  font-size: 0.75rem;
+  /* HIG Footnote: 13pt */
+  font-size: 0.8125rem;
+  letter-spacing: 0.5px;
 }
 
 .trait-lock {
   opacity: 0;
   transition: opacity 0.2s ease;
   flex-shrink: 0;
+  min-width: 24px;
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+.trait-lock .material-symbols-outlined {
+  font-size: 14px;
 }
 
 .trait-line:hover .trait-lock,
@@ -654,7 +883,26 @@ body::before {
   text-align: center;
   padding: var(--space-xl) 0;
   color: var(--text-tertiary);
-  font-size: 0.75rem;
+  /* HIG Footnote: 13pt */
+  font-size: 0.8125rem;
+}
+
+.footer [aria-label="love"] {
+  color: var(--accent-red);
+  font-size: 1em;
+  margin: 0 0.15em;
+}
+
+.footer-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.2s ease;
+}
+
+.footer-link:hover,
+.footer-link:focus-visible {
+  color: var(--accent-cyan);
 }
 
 /* --- Modal --- */
@@ -736,6 +984,79 @@ body::before {
   opacity: 1;
 }
 
+/* --- Trait Fizzle (CRT static on regenerate) --- */
+@keyframes trait-fizzle {
+  0% {
+    opacity: 0;
+    filter: blur(3px) brightness(2) contrast(1.4) hue-rotate(-10deg);
+    transform: translateX(-3px) skewX(6deg);
+    clip-path: inset(40% 0 40% 0);
+  }
+  15% {
+    opacity: 1;
+    filter: blur(1.5px) brightness(1.6) hue-rotate(8deg);
+    transform: translateX(4px);
+    clip-path: inset(0 0 60% 0);
+  }
+  30% {
+    opacity: 0.35;
+    filter: blur(0.5px) brightness(1.2);
+    transform: translateX(-2px);
+    clip-path: inset(20% 0 10% 0);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.35) contrast(1.1);
+    transform: translateX(1px);
+    clip-path: inset(0 0 0 0);
+  }
+  70% {
+    opacity: 0.8;
+    filter: brightness(0.9);
+    transform: translateX(-1px);
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    clip-path: inset(0);
+  }
+}
+
+.trait-fizzle {
+  animation: trait-fizzle 460ms steps(10, end) both;
+  will-change: opacity, filter, transform;
+}
+
+/* The short burst of "scanlines" feels more CRT-y on a dark bg */
+.trait-fizzle .trait-text {
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 3px,
+    rgba(0, 229, 255, 0.08) 3px,
+    rgba(0, 229, 255, 0.08) 4px
+  );
+  background-size: 100% 4px;
+  animation: trait-fizzle-scan 460ms steps(10, end) both;
+}
+
+@keyframes trait-fizzle-scan {
+  0%, 80% { background-position: 0 0; }
+  20% { background-position: 0 4px; }
+  40% { background-position: 0 -2px; }
+  60% { background-position: 0 2px; }
+  100% { background: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trait-fizzle,
+  .trait-fizzle .trait-text {
+    animation: none;
+    background: none;
+  }
+}
+
 /* --- CRT Boot Animation --- */
 @keyframes crt-boot {
   0% {
@@ -807,9 +1128,33 @@ body::before {
   }
 }
 
+/* Non-mobile: cards are always expanded; header title is not a disclosure */
+@media (min-width: 768px) {
+  .card .card-content {
+    max-height: none;
+    opacity: 1;
+    overflow: visible;
+  }
+
+  .card .card-summary {
+    display: none !important;
+  }
+
+  .card-header,
+  .card-header-title {
+    cursor: default;
+  }
+}
+
 @media (min-width: 1024px) {
   .cards-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Desktop: hide controls that only make sense on mobile/cramped screens */
+  #btn-left-hand,
+  .view-toggle {
+    display: none !important;
   }
 }
 

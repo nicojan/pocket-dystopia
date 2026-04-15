@@ -13,6 +13,83 @@ let history = [];
 let isFirstRoll = true;
 let lastTumbleDir = '';
 let dieIdleInterval = null;
+// Snapshot of the last rendered state, used to detect which traits changed
+// between renders so we can play the CRT-fizzle animation only on new ones.
+let lastRenderedSnapshot = null;
+
+// ============================================
+// D6 Face SVGs
+// ============================================
+
+const DIE_PIPS = {
+  1: [[60, 60]],
+  2: [[30, 30], [90, 90]],
+  3: [[30, 30], [60, 60], [90, 90]],
+  4: [[30, 30], [90, 30], [30, 90], [90, 90]],
+  5: [[30, 30], [90, 30], [60, 60], [30, 90], [90, 90]],
+  6: [[30, 30], [90, 30], [30, 60], [90, 60], [30, 90], [90, 90]],
+};
+
+function getDieFaceSVG(n, opts = {}) {
+  const pipFill = opts.pipFill || 'var(--accent-cyan)';
+  const stroke = opts.stroke || 'var(--accent-cyan)';
+  const fill = opts.fill || 'var(--bg-elevated)';
+  const strokeWidth = opts.strokeWidth || 2;
+  const pips = DIE_PIPS[n].map(
+    ([x, y]) => `<circle cx="${x}" cy="${y}" r="9" fill="${pipFill}"/>`
+  ).join('');
+  return `
+    <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="8" y="8" width="104" height="104" rx="18"
+        stroke="${stroke}" stroke-width="${strokeWidth}"
+        fill="${fill}" opacity="0.9"/>
+      ${opts.dashed === false ? '' : `<rect x="8" y="8" width="104" height="104" rx="18"
+        stroke="${stroke}" stroke-width="1" fill="none"
+        opacity="0.35" stroke-dasharray="4 4"/>`}
+      ${pips}
+    </svg>
+  `;
+}
+
+// Fizzle roughly every N face swaps so the effect is punctuation,
+// not a constant strobe.
+const DIE_FIZZLE_EVERY = 3;
+let dieFaceSwapCount = 0;
+function setDieFace(n) {
+  const el = document.getElementById('die-face');
+  if (!el) return;
+  el.innerHTML = getDieFaceSVG(n);
+  dieFaceSwapCount += 1;
+  if (dieFaceSwapCount % DIE_FIZZLE_EVERY === 0) {
+    el.classList.remove('die-fizzle');
+    // Force reflow so the animation restarts even if the class was just removed.
+    void el.offsetWidth;
+    el.classList.add('die-fizzle');
+  }
+}
+
+// Small d6 icon inside the "Roll" button — cycles forever.
+let rollIconInterval = null;
+function startRollIconCycle() {
+  if (rollIconInterval) clearInterval(rollIconInterval);
+  const el = document.getElementById('roll-die-icon');
+  if (!el) return;
+  let last = 0;
+  const tick = () => {
+    let f;
+    do { f = Math.floor(Math.random() * 6) + 1; } while (f === last);
+    last = f;
+    el.innerHTML = getDieFaceSVG(f, {
+      pipFill: 'currentColor',
+      stroke: 'currentColor',
+      fill: 'transparent',
+      strokeWidth: 6,
+      dashed: false,
+    });
+  };
+  tick();
+  rollIconInterval = setInterval(tick, 500);
+}
 
 // ============================================
 // Preferences
@@ -36,6 +113,8 @@ function applyPrefs() {
   const theme = prefs.theme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
   document.documentElement.setAttribute('data-theme', theme);
   document.documentElement.setAttribute('data-left-handed', String(prefs.leftHanded));
+  const lh = document.getElementById('btn-left-hand');
+  if (lh) lh.setAttribute('aria-pressed', String(prefs.leftHanded));
   updateThemeIcon(theme);
   setView(prefs.defaultView || 'expanded');
   document.getElementById('mood-filter').value = prefs.mood || 'all';
@@ -65,6 +144,8 @@ function toggleLeftHanded() {
   const current = document.documentElement.getAttribute('data-left-handed') === 'true';
   const next = !current;
   document.documentElement.setAttribute('data-left-handed', String(next));
+  const btn = document.getElementById('btn-left-hand');
+  if (btn) btn.setAttribute('aria-pressed', String(next));
   const prefs = loadPrefs();
   savePrefs({ ...prefs, leftHanded: next });
   showToast(next ? 'Left-handed mode on' : 'Left-handed mode off');
@@ -112,6 +193,13 @@ function setView(mode) {
 function setMood(mood) {
   const prefs = loadPrefs();
   savePrefs({ ...prefs, mood });
+
+  // If a build is already on screen, re-shuffle all unlocked traits under
+  // the new mood. Section- and trait-level locks are preserved because
+  // generateNightmare() already honors them.
+  if (buildState) {
+    generateNightmare();
+  }
 }
 
 function getCurrentMood() {
@@ -126,8 +214,11 @@ function getWeightedItems(pool, count, mood) {
   if (mood === 'all') {
     return shuffleAndPick(pool, count);
   }
+  // Soft-tighten: matching mood is weighted 8x vs. neutral items.
   const weighted = pool.flatMap(item =>
-    (item.mood && item.mood.includes(mood)) ? [item, item, item] : [item]
+    (item.mood && item.mood.includes(mood))
+      ? Array(8).fill(item)
+      : [item]
   );
   return shuffleAndPick(weighted, count);
 }
@@ -305,19 +396,27 @@ function rollDie() {
   if (isRolling) return;
   isRolling = true;
 
+  const container = document.getElementById('die-container');
+  if (container) container.classList.add('die-shaking');
+
   const dieWrapper = document.querySelector('.die-wrapper');
-  const dieNum = document.getElementById('die-num');
 
   if (dieIdleInterval) {
     clearInterval(dieIdleInterval);
     dieIdleInterval = null;
   }
 
-  // Fast number cycle
+  // Fast face cycle
   const rollEnd = Date.now() + 900;
-  function fastTick() {
-    if (dieNum) {
-      dieNum.textContent = Math.floor(Math.random() * 20) + 1;
+  let lastFace = 0;
+  let lastSwap = 0;
+  function fastTick(ts) {
+    if (!lastSwap || ts - lastSwap > 70) {
+      let f;
+      do { f = Math.floor(Math.random() * 6) + 1; } while (f === lastFace);
+      lastFace = f;
+      setDieFace(f);
+      lastSwap = ts;
     }
     if (Date.now() < rollEnd) {
       requestAnimationFrame(fastTick);
@@ -334,6 +433,7 @@ function rollDie() {
         resultsContainer.classList.add('crt-boot');
         setTimeout(() => resultsContainer.classList.remove('crt-boot'), 700);
       }
+      if (container) container.classList.remove('die-shaking');
       isFirstRoll = false;
       isRolling = false;
       startDieIdleCycle();
@@ -346,19 +446,21 @@ function rollDie() {
       const dir = available[Math.floor(Math.random() * available.length)];
       lastTumbleDir = dir;
 
-      const container = dieWrapper.parentElement;
-      if (container) {
-        container.classList.add(dir);
+      const tumbleContainer = dieWrapper.parentElement;
+      if (tumbleContainer) {
+        tumbleContainer.classList.add(dir);
         // Swap content at midpoint
         setTimeout(() => generateNightmare(), 325);
         setTimeout(() => {
-          container.classList.remove(dir);
+          tumbleContainer.classList.remove(dir);
+          if (container) container.classList.remove('die-shaking');
           isRolling = false;
           startDieIdleCycle();
         }, 650);
       } else {
         setTimeout(() => {
           generateNightmare();
+          if (container) container.classList.remove('die-shaking');
           isRolling = false;
           startDieIdleCycle();
         }, 325);
@@ -366,6 +468,7 @@ function rollDie() {
     } else {
       setTimeout(() => {
         generateNightmare();
+        if (container) container.classList.remove('die-shaking');
         isRolling = false;
       }, 900);
     }
@@ -378,11 +481,17 @@ function rollDie() {
 
 function startDieIdleCycle() {
   if (dieIdleInterval) clearInterval(dieIdleInterval);
-  const dieNum = document.getElementById('die-num');
-  if (!dieNum) return;
-  dieIdleInterval = setInterval(() => {
-    dieNum.textContent = Math.floor(Math.random() * 20) + 1;
-  }, 600);
+  const el = document.getElementById('die-face');
+  if (!el) return;
+  let last = 0;
+  const tick = () => {
+    let f;
+    do { f = Math.floor(Math.random() * 6) + 1; } while (f === last);
+    last = f;
+    setDieFace(f);
+  };
+  tick();
+  dieIdleInterval = setInterval(tick, 600);
 }
 
 // ============================================
@@ -401,12 +510,34 @@ function showIntro() {
   startDieIdleCycle();
 }
 
+// Build a flat map of { "sectionKey:traitPath": text } from a build state,
+// used to diff renders and figure out which traits are new.
+function snapshotTraitTexts(state) {
+  if (!state) return {};
+  const out = {};
+  for (const [key, s] of Object.entries(state.sections)) {
+    if (s.traits) s.traits.forEach((t, i) => { out[`${key}:traits:${i}`] = t.text; });
+    if (s.weakness) out[`${key}:weakness`] = s.weakness.text;
+    if (s.trauma) out[`${key}:trauma`] = s.trauma.text;
+    if (s.when) out[`${key}:when`] = s.when.text;
+    if (s.where) out[`${key}:where`] = s.where.text;
+  }
+  return out;
+}
+
 function renderCards() {
   if (!buildState) return;
 
   const container = document.getElementById('results-container');
   const prefs = loadPrefs();
   const viewMode = prefs.defaultView || 'expanded';
+
+  const prev = lastRenderedSnapshot;
+  const current = snapshotTraitTexts(buildState);
+  // On first render, don't fizzle anything (the CRT boot handles it).
+  const changedKeys = prev
+    ? new Set(Object.keys(current).filter(k => current[k] !== prev[k]))
+    : new Set();
 
   const sections = [
     { key: 'hero', title: 'THE HERO', icon: 'person' },
@@ -426,70 +557,81 @@ function renderCards() {
     let summaryText = '';
 
     if (key === 'setting') {
-      traitsHtml = renderSettingTraits(section);
+      traitsHtml = renderSettingTraits(section, changedKeys);
       summaryText = `${section.when.text} — ${section.where.text}`;
     } else {
-      traitsHtml = renderSectionTraits(key, section);
+      traitsHtml = renderSectionTraits(key, section, changedKeys);
       const firstTrait = section.traits?.[0];
       summaryText = firstTrait ? firstTrait.text : '';
     }
 
+    const contentId = `card-content-${key}`;
+    const isExpanded = viewMode === 'expanded';
     return `
-      <div class="card${expandedClass}${lockedClass}" data-section="${key}">
-        <div class="card-header" onclick="toggleCardExpand('${key}')">
-          <span class="card-header-title">&gt;&gt; ${title}</span>
+      <section class="card${expandedClass}${lockedClass}" data-section="${key}" aria-labelledby="card-title-${key}">
+        <div class="card-header">
+          <button class="card-header-title" id="card-title-${key}"
+            type="button"
+            onclick="toggleCardExpand('${key}')"
+            aria-expanded="${isExpanded}"
+            aria-controls="${contentId}">&gt;&gt; ${title}</button>
           <div class="card-header-actions">
             <button class="btn-icon lock-icon ${isLocked ? 'icon-filled' : ''}"
-              onclick="event.stopPropagation(); toggleSectionLock('${key}')"
+              onclick="toggleSectionLock('${key}')"
               aria-label="${isLocked ? 'Unlock' : 'Lock'} ${title.toLowerCase()} section"
               aria-pressed="${isLocked}">
-              <span class="material-symbols-outlined ${isLocked ? 'icon-filled' : ''}">${isLocked ? 'lock' : 'lock_open'}</span>
+              <span class="material-symbols-outlined ${isLocked ? 'icon-filled' : ''}" aria-hidden="true">${isLocked ? 'lock' : 'lock_open'}</span>
             </button>
-            <button class="btn-icon" onclick="event.stopPropagation(); rerollSection('${key}')" aria-label="Re-roll ${title.toLowerCase()}"${isLocked ? ' disabled' : ''}>
-              <span class="material-symbols-outlined">sync</span>
+            <button class="btn-icon" onclick="rerollSection('${key}')" aria-label="Re-roll ${title.toLowerCase()}"${isLocked ? ' disabled' : ''}>
+              <span class="material-symbols-outlined" aria-hidden="true">sync</span>
             </button>
           </div>
         </div>
         <div class="card-summary">${summaryText}...</div>
-        <div class="card-content">
+        <div class="card-content" id="${contentId}">
           <div class="card-body">${traitsHtml}</div>
         </div>
-      </div>
+      </section>
     `;
   }).join('');
 
+  lastRenderedSnapshot = current;
   updateUndoButton();
 }
 
-function renderSectionTraits(sectionKey, section) {
+function renderSectionTraits(sectionKey, section, changedKeys) {
   let html = '';
 
   if (section.traits) {
     html += section.traits.map((trait, i) =>
-      renderTraitLine('>', trait.text, trait.locked, sectionKey, 'traits', i)
+      renderTraitLine('>', trait.text, trait.locked, sectionKey, 'traits', i, false, changedKeys)
     ).join('');
   }
 
   if (section.weakness) {
-    html += renderTraitLine('WEAK:', section.weakness.text, section.weakness.locked, sectionKey, 'weakness', null, true);
+    html += renderTraitLine('WEAK:', section.weakness.text, section.weakness.locked, sectionKey, 'weakness', null, true, changedKeys);
   }
 
   if (section.trauma) {
-    html += renderTraitLine('TRAUMA:', section.trauma.text, section.trauma.locked, sectionKey, 'trauma', null, true);
+    html += renderTraitLine('TRAUMA:', section.trauma.text, section.trauma.locked, sectionKey, 'trauma', null, true, changedKeys);
   }
 
   return html;
 }
 
-function renderSettingTraits(section) {
+function renderSettingTraits(section, changedKeys) {
   let html = '';
-  html += renderTraitLine('WHEN:', section.when.text, section.when.locked, 'setting', 'when', null, true);
-  html += renderTraitLine('WHERE:', section.where.text, section.where.locked, 'setting', 'where', null, true);
+  html += renderTraitLine('WHEN:', section.when.text, section.when.locked, 'setting', 'when', null, true, changedKeys);
+  html += renderTraitLine('WHERE:', section.where.text, section.where.locked, 'setting', 'where', null, true, changedKeys);
   return html;
 }
 
-function renderTraitLine(prefix, text, locked, sectionKey, traitType, index, isLabel) {
+function renderTraitLine(prefix, text, locked, sectionKey, traitType, index, isLabel, changedKeys) {
   const lockedClass = locked ? ' trait-locked' : '';
+  const snapshotKey = index !== null && index !== undefined
+    ? `${sectionKey}:${traitType}:${index}`
+    : `${sectionKey}:${traitType}`;
+  const fizzleClass = changedKeys && changedKeys.has(snapshotKey) ? ' trait-fizzle' : '';
   const lockVisibleClass = locked ? ' visible' : '';
   const lockIcon = locked ? 'lock' : 'lock_open';
   const iconClass = locked ? ' icon-filled' : '';
@@ -502,12 +644,12 @@ function renderTraitLine(prefix, text, locked, sectionKey, traitType, index, isL
     : `<span class="trait-prefix">${prefix}</span>`;
 
   return `
-    <div class="trait-line${lockedClass}">
+    <div class="trait-line${lockedClass}${fizzleClass}">
       ${prefixHtml}
       <span class="trait-text">${escapeHtml(text)}</span>
       <button class="btn-icon trait-lock${lockVisibleClass}" onclick="${clickHandler}"
-        aria-label="${locked ? 'Unlock' : 'Lock'} trait" aria-pressed="${locked}">
-        <span class="material-symbols-outlined${iconClass}" style="font-size:16px">${lockIcon}</span>
+        aria-label="${locked ? 'Unlock' : 'Lock'} trait: ${escapeHtml(text)}" aria-pressed="${locked}">
+        <span class="material-symbols-outlined${iconClass}" aria-hidden="true">${lockIcon}</span>
       </button>
     </div>
   `;
@@ -524,8 +666,13 @@ function escapeHtml(str) {
 // ============================================
 
 function toggleCardExpand(sectionKey) {
+  // Non-mobile keeps every card expanded — collapse is a mobile-only affordance.
+  if (window.matchMedia('(min-width: 768px)').matches) return;
   const card = document.querySelector(`.card[data-section="${sectionKey}"]`);
-  if (card) card.classList.toggle('expanded');
+  if (!card) return;
+  card.classList.toggle('expanded');
+  const title = card.querySelector('.card-header-title');
+  if (title) title.setAttribute('aria-expanded', String(card.classList.contains('expanded')));
 }
 
 // ============================================
@@ -874,6 +1021,7 @@ function init() {
   initKeyboard();
   initModals();
   initShakeDetection();
+  startRollIconCycle();
 
   const saved = loadSavedState();
   if (saved) {
