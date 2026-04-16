@@ -1101,11 +1101,42 @@ body::before {
   }
 }
 
+/* Home button only visible on mobile (where the logo is hidden) */
+.btn-home-mobile {
+  display: none;
+}
+
+/* Flip the "back of hand" icon to preview the destination mode.
+   In right-handed mode, the button switches to left-handed — so show a left hand. */
+[data-left-handed="false"] #btn-left-hand .material-symbols-outlined {
+  transform: scaleX(-1);
+}
+
 /* --- Responsive --- */
 @media (max-width: 600px) {
-  .top-bar-title {
-    font-size: 0.75rem;
-    letter-spacing: 1px;
+  .top-bar-left {
+    display: none;
+  }
+
+  .btn-home-mobile {
+    display: inline-flex;
+  }
+
+  /* Let the nav span the full width so the die can push to the opposite edge */
+  .top-bar-right {
+    flex: 1;
+  }
+
+  /* Right-handed: die sticks to the right, rest of the nav on the left */
+  #btn-roll-all {
+    margin-left: auto;
+  }
+
+  /* Left-handed: container is row-reverse, so invert the auto-margin
+     to push the die to the visual left instead. */
+  [data-left-handed="true"] #btn-roll-all {
+    margin-left: 0;
+    margin-right: auto;
   }
 
   .text-display {
