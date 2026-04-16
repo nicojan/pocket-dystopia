@@ -603,8 +603,10 @@ body::before {
   flex-direction: row-reverse;
 }
 
-[data-left-handed="true"] .trait-line {
-  flex-direction: row-reverse;
+/* Keep chevrons/labels on the left; only the interactive lock button moves
+   to the left so users can reach it with their thumb. */
+[data-left-handed="true"] .trait-line .trait-lock {
+  order: -1;
 }
 
 /* --- Controls Bar --- */
@@ -868,6 +870,13 @@ body::before {
 .trait-line:hover .trait-lock,
 .trait-line .trait-lock.visible {
   opacity: 1;
+}
+
+/* Touch devices have no hover — show lock at low opacity so users can discover it */
+@media (hover: none) {
+  .trait-lock {
+    opacity: 0.35;
+  }
 }
 
 .lock-icon {
