@@ -16,6 +16,8 @@ let dieIdleInterval = null;
 // Snapshot of the last rendered state, used to detect which traits changed
 // between renders so we can play the CRT-fizzle animation only on new ones.
 let lastRenderedSnapshot = null;
+// Section keys scheduled to play the card-pulse effect on next render.
+const pulseAfterRender = new Set();
 
 // ============================================
 // D6 Face SVGs
@@ -113,18 +115,22 @@ function applyPrefs() {
   const theme = prefs.theme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
   document.documentElement.setAttribute('data-theme', theme);
   document.documentElement.setAttribute('data-left-handed', String(prefs.leftHanded));
-  const lh = document.getElementById('btn-left-hand');
-  if (lh) lh.setAttribute('aria-pressed', String(prefs.leftHanded));
-  updateThemeIcon(theme);
+  updateMoreMenuState();
   setView(prefs.defaultView || 'expanded');
-  document.getElementById('mood-filter').value = prefs.mood || 'all';
+  applyMood(prefs.mood || 'all', { skipReroll: true });
 }
 
-function updateThemeIcon(theme) {
-  const icon = document.getElementById('theme-icon');
-  if (icon) {
-    icon.textContent = theme === 'dark' ? 'light_mode' : 'dark_mode';
-  }
+// Sync the "More" overflow menu labels / checked-state with the live prefs.
+function updateMoreMenuState() {
+  const theme = document.documentElement.getAttribute('data-theme');
+  const themeLabel = document.getElementById('more-theme-label');
+  const themeIcon = document.getElementById('more-theme-icon');
+  if (themeLabel) themeLabel.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+  if (themeIcon) themeIcon.textContent = theme === 'dark' ? 'light_mode' : 'dark_mode';
+
+  const lhItem = document.querySelector('.more-menu-lefthand');
+  const leftHanded = document.documentElement.getAttribute('data-left-handed') === 'true';
+  if (lhItem) lhItem.setAttribute('aria-checked', String(leftHanded));
 }
 
 // ============================================
@@ -135,7 +141,7 @@ function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
-  updateThemeIcon(next);
+  updateMoreMenuState();
   const prefs = loadPrefs();
   savePrefs({ ...prefs, theme: next });
 }
@@ -144,11 +150,9 @@ function toggleLeftHanded() {
   const current = document.documentElement.getAttribute('data-left-handed') === 'true';
   const next = !current;
   document.documentElement.setAttribute('data-left-handed', String(next));
-  const btn = document.getElementById('btn-left-hand');
-  if (btn) btn.setAttribute('aria-pressed', String(next));
+  updateMoreMenuState();
   const prefs = loadPrefs();
   savePrefs({ ...prefs, leftHanded: next });
-  showToast(next ? 'Left-handed mode on' : 'Left-handed mode off');
 }
 
 // ============================================
@@ -190,20 +194,111 @@ function setView(mode) {
 // Mood Filter
 // ============================================
 
-function setMood(mood) {
-  const prefs = loadPrefs();
-  savePrefs({ ...prefs, mood });
+// Mood values map to the labels shown in the custom combobox.
+const MOOD_LABELS = {
+  'all': 'All moods',
+  'corporate': 'Corporate dystopia',
+  'post-apocalyptic': 'Post-apocalyptic',
+  'ai-takeover': 'AI takeover',
+  'political': 'Political satire',
+};
 
-  // If a build is already on screen, re-shuffle all unlocked traits under
-  // the new mood. Section- and trait-level locks are preserved because
-  // generateNightmare() already honors them.
-  if (buildState) {
+let currentMood = 'all';
+
+function applyMood(mood, opts = {}) {
+  currentMood = mood;
+  const labelEl = document.getElementById('mood-combobox-label');
+  if (labelEl) labelEl.textContent = MOOD_LABELS[mood] || mood;
+  // Update checkmarks on each option.
+  document.querySelectorAll('.mood-option').forEach(li => {
+    const match = li.dataset.mood === mood;
+    li.setAttribute('aria-selected', String(match));
+  });
+  if (!opts.skipReroll && buildState) {
     generateNightmare();
   }
 }
 
+function selectMood(mood) {
+  const prefs = loadPrefs();
+  savePrefs({ ...prefs, mood });
+  applyMood(mood);
+  closeMoodListbox();
+  document.getElementById('mood-combobox')?.focus();
+}
+
 function getCurrentMood() {
-  return document.getElementById('mood-filter')?.value || 'all';
+  return currentMood;
+}
+
+// --- Mood listbox (custom combobox) ---
+
+function toggleMoodListbox(event) {
+  if (event) event.stopPropagation();
+  const listbox = document.getElementById('mood-listbox');
+  const btn = document.getElementById('mood-combobox');
+  if (!listbox || !btn) return;
+  if (listbox.hidden) openMoodListbox();
+  else closeMoodListbox();
+}
+
+function openMoodListbox() {
+  const listbox = document.getElementById('mood-listbox');
+  const btn = document.getElementById('mood-combobox');
+  if (!listbox || !btn) return;
+  listbox.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+  // Move focus to the selected option.
+  const selected = listbox.querySelector('[aria-selected="true"]') || listbox.querySelector('.mood-option');
+  if (selected) selected.focus();
+}
+
+function closeMoodListbox() {
+  const listbox = document.getElementById('mood-listbox');
+  const btn = document.getElementById('mood-combobox');
+  if (!listbox || !btn) return;
+  listbox.hidden = true;
+  btn.setAttribute('aria-expanded', 'false');
+}
+
+function initMoodCombobox() {
+  const listbox = document.getElementById('mood-listbox');
+  const btn = document.getElementById('mood-combobox');
+  if (!listbox || !btn) return;
+
+  listbox.addEventListener('keydown', (e) => {
+    const options = Array.from(listbox.querySelectorAll('.mood-option'));
+    const idx = options.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = options[(idx + 1) % options.length];
+      next?.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = options[(idx - 1 + options.length) % options.length];
+      prev?.focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      options[0]?.focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      options[options.length - 1]?.focus();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const mood = document.activeElement?.dataset.mood;
+      if (mood) selectMood(mood);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMoodListbox();
+      btn.focus();
+    }
+  });
+
+  // Click outside to close.
+  document.addEventListener('click', (e) => {
+    if (listbox.hidden) return;
+    if (!listbox.contains(e.target) && !btn.contains(e.target)) closeMoodListbox();
+  });
 }
 
 // ============================================
@@ -290,6 +385,8 @@ function rerollSection(sectionKey) {
   if (section.locked) return;
 
   pushHistory();
+  // Flag the section for a card-level pulse once renderCards rebuilds the DOM.
+  pulseAfterRender.add(sectionKey);
   const mood = getCurrentMood();
 
   switch (sectionKey) {
@@ -506,8 +603,23 @@ function showResults() {
 function showIntro() {
   document.getElementById('intro-screen').classList.remove('hidden');
   document.getElementById('results-screen').classList.remove('active');
+  const logline = document.getElementById('logline-container');
+  if (logline) logline.hidden = true;
+  // Resume row visible only when a saved build exists.
+  const resume = document.getElementById('intro-resume');
+  if (resume) resume.hidden = !loadSavedState();
   isFirstRoll = true;
   startDieIdleCycle();
+}
+
+// Resume row action — jumps back to results without rolling.
+function resumeBuild() {
+  const saved = loadSavedState();
+  if (!saved) return;
+  buildState = saved;
+  isFirstRoll = false;
+  showResults();
+  renderCards();
 }
 
 // Build a flat map of { "sectionKey:traitPath": text } from a build state,
@@ -539,15 +651,17 @@ function renderCards() {
     ? new Set(Object.keys(current).filter(k => current[k] !== prev[k]))
     : new Set();
 
+  renderLogline(changedKeys);
+
   const sections = [
-    { key: 'hero', title: 'THE HERO', icon: 'person' },
-    { key: 'villain', title: 'THE VILLAIN', icon: 'skull' },
-    { key: 'squad', title: 'THE SQUAD', icon: 'groups' },
-    { key: 'setting', title: 'THE SETTING', icon: 'location_on' },
-    { key: 'obstacles', title: 'OBSTACLES', icon: 'warning' },
+    { key: 'hero', title: 'THE HERO', display: 'The Hero', icon: 'person' },
+    { key: 'villain', title: 'THE VILLAIN', display: 'The Villain', icon: 'skull' },
+    { key: 'squad', title: 'THE SQUAD', display: 'The Squad', icon: 'groups' },
+    { key: 'setting', title: 'THE SETTING', display: 'The Setting', icon: 'location_on' },
+    { key: 'obstacles', title: 'OBSTACLES', display: 'Obstacles', icon: 'warning' },
   ];
 
-  container.innerHTML = sections.map(({ key, title }) => {
+  container.innerHTML = sections.map(({ key, title, display }) => {
     const section = buildState.sections[key];
     const isLocked = section.locked;
     const expandedClass = viewMode === 'expanded' ? ' expanded' : '';
@@ -570,20 +684,24 @@ function renderCards() {
     return `
       <section class="card${expandedClass}${lockedClass}" data-section="${key}" aria-labelledby="card-title-${key}">
         <div class="card-header">
-          <button class="card-header-title" id="card-title-${key}"
-            type="button"
-            onclick="toggleCardExpand('${key}')"
-            aria-expanded="${isExpanded}"
-            aria-controls="${contentId}">&gt;&gt; ${title}</button>
+          <h2 class="card-header-title" id="card-title-${key}"><span class="card-header-prefix" aria-hidden="true">&gt;&gt;</span> ${title}</h2>
           <div class="card-header-actions">
+            <button class="btn-icon" onclick="rerollSection('${key}')" aria-label="Re-roll this card" title="Re-roll this card"${isLocked ? ' disabled' : ''}>
+              <span class="material-symbols-outlined" aria-hidden="true">casino</span>
+            </button>
             <button class="btn-icon lock-icon ${isLocked ? 'icon-filled' : ''}"
               onclick="toggleSectionLock('${key}')"
-              aria-label="${isLocked ? 'Unlock' : 'Lock'} ${title.toLowerCase()} section"
+              aria-label="${isLocked ? 'Unlock' : 'Lock'} this card"
+              title="${isLocked ? 'Unlock this card' : 'Lock this card'}"
               aria-pressed="${isLocked}">
               <span class="material-symbols-outlined ${isLocked ? 'icon-filled' : ''}" aria-hidden="true">${isLocked ? 'lock' : 'lock_open'}</span>
             </button>
-            <button class="btn-icon" onclick="rerollSection('${key}')" aria-label="Re-roll ${title.toLowerCase()}"${isLocked ? ' disabled' : ''}>
-              <span class="material-symbols-outlined" aria-hidden="true">sync</span>
+            <button class="btn-icon card-chevron"
+              onclick="toggleCardExpand('${key}')"
+              aria-expanded="${isExpanded}"
+              aria-controls="${contentId}"
+              aria-label="${isExpanded ? 'Collapse' : 'Expand'} ${display}">
+              <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
             </button>
           </div>
         </div>
@@ -595,8 +713,93 @@ function renderCards() {
     `;
   }).join('');
 
+  // Apply queued card pulses (from section re-rolls). Scoped to just the
+  // specific cards so full-build rolls don't pulse everything.
+  if (pulseAfterRender.size > 0) {
+    pulseAfterRender.forEach(key => {
+      const card = document.querySelector(`.card[data-section="${key}"]`);
+      if (card) {
+        card.classList.remove('card-pulse');
+        void card.offsetWidth;
+        card.classList.add('card-pulse');
+        setTimeout(() => card.classList.remove('card-pulse'), 500);
+      }
+    });
+    pulseAfterRender.clear();
+  }
+
   lastRenderedSnapshot = current;
   updateUndoButton();
+}
+
+// The logline reads from these state paths. If any of them change between
+// renders the logline re-renders with a fizzle. Other trait changes (e.g.
+// hero trait 2) don't trigger a re-render since they aren't quoted here.
+const LOGLINE_SOURCE_KEYS = [
+  'setting:where',
+  'setting:when',
+  'hero:traits:0',
+  'villain:traits:0',
+  'squad:traits:0',
+  'obstacles:traits:0',
+];
+
+function buildLoglineText(state) {
+  if (!state || !state.sections) return '';
+  const s = state.sections;
+  const parts = [];
+  const where = s.setting?.where?.text;
+  const when = s.setting?.when?.text;
+  if (where && when) parts.push(`In ${where}, ${when}.`);
+  const hero0 = s.hero?.traits?.[0]?.text;
+  const villain0 = s.villain?.traits?.[0]?.text;
+  if (hero0 && villain0) parts.push(`${hero0} meets ${villain0}.`);
+  const squad0 = s.squad?.traits?.[0]?.text;
+  const obstacle0 = s.obstacles?.traits?.[0]?.text;
+  if (squad0 && obstacle0) parts.push(`${squad0} gets dragged in. ${obstacle0}.`);
+  return parts.join(' ');
+}
+
+function renderLogline(changedKeys) {
+  const container = document.getElementById('logline-container');
+  const textEl = document.getElementById('logline-text');
+  if (!container || !textEl || !buildState) return;
+
+  const text = buildLoglineText(buildState);
+  if (!text) {
+    container.hidden = true;
+    return;
+  }
+
+  const sourceChanged = LOGLINE_SOURCE_KEYS.some(k => changedKeys && changedKeys.has(k));
+
+  const prevText = textEl.textContent;
+  textEl.textContent = text;
+  container.hidden = false;
+
+  if (sourceChanged) {
+    textEl.classList.remove('logline-fizzle');
+    // Force reflow so the animation restarts cleanly.
+    void textEl.offsetWidth;
+    textEl.classList.add('logline-fizzle');
+    // Announce the updated logline so screen-reader users hear the new
+    // stitched-together build without having to re-scan each card.
+    if (prevText && prevText !== text) {
+      announce(text);
+    }
+  }
+}
+
+function copyLogline(event) {
+  const text = buildLoglineText(buildState);
+  if (!text) return;
+  const trigger = event?.currentTarget;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Logline copied');
+    flashCopyCheck(trigger);
+  }).catch(() => {
+    showToast('Copy failed');
+  });
 }
 
 function renderSectionTraits(sectionKey, section, changedKeys) {
@@ -632,25 +835,39 @@ function renderTraitLine(prefix, text, locked, sectionKey, traitType, index, isL
     ? `${sectionKey}:${traitType}:${index}`
     : `${sectionKey}:${traitType}`;
   const fizzleClass = changedKeys && changedKeys.has(snapshotKey) ? ' trait-fizzle' : '';
-  const lockVisibleClass = locked ? ' visible' : '';
   const lockIcon = locked ? 'lock' : 'lock_open';
   const iconClass = locked ? ' icon-filled' : '';
-  const clickHandler = index !== null && index !== undefined
-    ? `toggleTraitLock('${sectionKey}','${traitType}',${index})`
-    : `toggleTraitLock('${sectionKey}','${traitType}')`;
+  const idxArg = index !== null && index !== undefined ? `,${index}` : '';
+  const lockClickHandler = `toggleTraitLock('${sectionKey}','${traitType}'${idxArg})`;
+  const swapClickHandler = `rerollSingleTrait('${sectionKey}','${traitType}'${idxArg})`;
 
   const prefixHtml = isLabel
     ? `<span class="trait-label">${prefix}</span>`
     : `<span class="trait-prefix">${prefix}</span>`;
 
+  const truncated = text.length > 40 ? text.slice(0, 40) + '…' : text;
+  const swapLabel = `Swap trait: ${escapeHtml(truncated)}`;
+  const swapTitle = locked ? 'Unlock to swap' : 'Swap this one';
+  const lockLabel = locked ? 'Release this' : 'Keep this';
+
   return `
     <div class="trait-line${lockedClass}${fizzleClass}">
       ${prefixHtml}
       <span class="trait-text">${escapeHtml(text)}</span>
-      <button class="btn-icon trait-lock${lockVisibleClass}" onclick="${clickHandler}"
-        aria-label="${locked ? 'Unlock' : 'Lock'} trait: ${escapeHtml(text)}" aria-pressed="${locked}">
-        <span class="material-symbols-outlined${iconClass}" aria-hidden="true">${lockIcon}</span>
-      </button>
+      <div class="trait-actions">
+        <button class="btn-icon trait-swap"
+          onclick="${swapClickHandler}"
+          aria-label="${swapLabel}"
+          title="${swapTitle}"${locked ? ' disabled' : ''}>
+          <span class="material-symbols-outlined" aria-hidden="true">replay</span>
+        </button>
+        <button class="btn-icon trait-lock" onclick="${lockClickHandler}"
+          aria-label="${lockLabel}"
+          title="${lockLabel}"
+          aria-pressed="${locked}">
+          <span class="material-symbols-outlined${iconClass}" aria-hidden="true">${lockIcon}</span>
+        </button>
+      </div>
     </div>
   `;
 }
@@ -671,8 +888,18 @@ function toggleCardExpand(sectionKey) {
   const card = document.querySelector(`.card[data-section="${sectionKey}"]`);
   if (!card) return;
   card.classList.toggle('expanded');
-  const title = card.querySelector('.card-header-title');
-  if (title) title.setAttribute('aria-expanded', String(card.classList.contains('expanded')));
+  const expanded = card.classList.contains('expanded');
+  const chevron = card.querySelector('.card-chevron');
+  if (chevron) {
+    chevron.setAttribute('aria-expanded', String(expanded));
+    // Find the section display name for the accessible label.
+    const sectionLabels = {
+      hero: 'The Hero', villain: 'The Villain', squad: 'The Squad',
+      setting: 'The Setting', obstacles: 'Obstacles',
+    };
+    const label = sectionLabels[sectionKey] || sectionKey;
+    chevron.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} ${label}`);
+  }
 }
 
 // ============================================
@@ -682,33 +909,127 @@ function toggleCardExpand(sectionKey) {
 function toggleSectionLock(sectionKey) {
   if (!buildState) return;
   const section = buildState.sections[sectionKey];
+  const willBeLocked = !section.locked;
   buildState = {
     ...buildState,
     sections: {
       ...buildState.sections,
-      [sectionKey]: { ...section, locked: !section.locked },
+      [sectionKey]: { ...section, locked: willBeLocked },
     },
   };
   saveBuildState();
   renderCards();
+  const labels = {
+    hero: 'The Hero', villain: 'The Villain', squad: 'The Squad',
+    setting: 'The Setting', obstacles: 'Obstacles',
+  };
+  announce(`${labels[sectionKey] || sectionKey} ${willBeLocked ? 'locked' : 'unlocked'}`);
 }
 
 function toggleTraitLock(sectionKey, traitType, index) {
   if (!buildState) return;
   const section = { ...buildState.sections[sectionKey] };
+  let willBeLocked = false;
 
   if (index !== undefined && index !== null) {
-    const traits = section.traits.map((t, i) =>
-      i === index ? { ...t, locked: !t.locked } : t
-    );
+    const traits = section.traits.map((t, i) => {
+      if (i === index) {
+        willBeLocked = !t.locked;
+        return { ...t, locked: !t.locked };
+      }
+      return t;
+    });
     section.traits = traits;
   } else {
-    section[traitType] = { ...section[traitType], locked: !section[traitType].locked };
+    willBeLocked = !section[traitType].locked;
+    section[traitType] = { ...section[traitType], locked: willBeLocked };
   }
 
   buildState = {
     ...buildState,
     sections: { ...buildState.sections, [sectionKey]: section },
+  };
+  saveBuildState();
+  renderCards();
+
+  // One-time tutorial toast for the first ever trait-level lock.
+  if (willBeLocked) {
+    const prefs = loadPrefs();
+    if (!prefs.hasSeenLockHint) {
+      showToast("Locked — it'll survive your next roll");
+      savePrefs({ ...prefs, hasSeenLockHint: true });
+    }
+  }
+
+  announce(`Trait ${willBeLocked ? 'locked' : 'unlocked'}`);
+}
+
+// Map of sectionKey:traitType → data pool for single-trait re-rolls.
+const TRAIT_POOL_MAP = {
+  'hero:traits': 'heroTraits',
+  'hero:weakness': 'heroWeaknesses',
+  'hero:trauma': 'heroTraumas',
+  'villain:traits': 'villainTraits',
+  'villain:weakness': 'villainWeaknesses',
+  'squad:traits': 'squadMembers',
+  'setting:when': 'times',
+  'setting:where': 'settings',
+  'obstacles:traits': 'obstacles',
+};
+
+function rerollSingleTrait(sectionKey, traitType, index) {
+  if (!buildState) return;
+  const section = buildState.sections[sectionKey];
+  if (!section) return;
+
+  const isArrayTrait = index !== undefined && index !== null;
+  const currentTrait = isArrayTrait ? section.traits[index] : section[traitType];
+  if (!currentTrait || currentTrait.locked) return;
+
+  const poolName = TRAIT_POOL_MAP[`${sectionKey}:${traitType}`];
+  const pool = poolName && DATA[poolName];
+  if (!pool) return;
+
+  pushHistory();
+
+  // Build the set of texts to avoid: the current trait text plus any
+  // siblings in the same array so we don't produce duplicates in one card.
+  const avoid = new Set();
+  avoid.add(currentTrait.text);
+  if (isArrayTrait && section.traits) {
+    section.traits.forEach((t, i) => {
+      if (i !== index) avoid.add(t.text);
+    });
+  }
+
+  const mood = getCurrentMood();
+  const sampleSize = Math.min(16, pool.length);
+  const candidates = getWeightedItems(pool, sampleSize, mood);
+  let newText = currentTrait.text;
+  for (const c of candidates) {
+    if (!avoid.has(c.text)) {
+      newText = c.text;
+      break;
+    }
+  }
+
+  let newSection;
+  if (isArrayTrait) {
+    newSection = {
+      ...section,
+      traits: section.traits.map((t, i) => i === index ? { ...t, text: newText } : t),
+    };
+  } else {
+    newSection = {
+      ...section,
+      [traitType]: { ...section[traitType], text: newText },
+    };
+  }
+
+  buildState = {
+    ...buildState,
+    timestamp: Date.now(),
+    sections: { ...buildState.sections, [sectionKey]: newSection },
   };
   saveBuildState();
   renderCards();
@@ -737,22 +1058,63 @@ function undo() {
   updateUndoButton();
 }
 
+let undoLabelTimeout = null;
+
 function updateUndoButton() {
   const btn = document.getElementById('btn-undo');
-  if (btn) btn.disabled = history.length === 0;
+  if (!btn) return;
+  const wasDisabled = btn.disabled;
+  const shouldDisable = history.length === 0;
+  btn.disabled = shouldDisable;
+  btn.title = shouldDisable ? 'Nothing to undo yet' : 'Undo last roll';
+
+  // Transition from disabled → enabled: flash the "Undo roll" label for 1.5s.
+  if (wasDisabled && !shouldDisable) {
+    btn.classList.add('btn-undo-label-visible');
+    if (undoLabelTimeout) clearTimeout(undoLabelTimeout);
+    undoLabelTimeout = setTimeout(() => {
+      btn.classList.remove('btn-undo-label-visible');
+    }, 1500);
+  } else if (!shouldDisable && !wasDisabled) {
+    // Subsequent pushes: retrigger the label so it pops again.
+    btn.classList.remove('btn-undo-label-visible');
+    void btn.offsetWidth;
+    btn.classList.add('btn-undo-label-visible');
+    if (undoLabelTimeout) clearTimeout(undoLabelTimeout);
+    undoLabelTimeout = setTimeout(() => {
+      btn.classList.remove('btn-undo-label-visible');
+    }, 1500);
+  }
 }
 
 // ============================================
 // Copy to Clipboard
 // ============================================
 
-function copyBuild() {
+// Brief checkmark-swap feedback on any copy button. The button's first
+// material-symbols-outlined span swaps its textContent to "check" for 1s.
+function flashCopyCheck(triggerEl) {
+  if (!triggerEl) return;
+  const icon = triggerEl.querySelector('.material-symbols-outlined');
+  if (!icon) return;
+  const original = icon.textContent;
+  icon.textContent = 'check';
+  icon.classList.add('icon-copied');
+  setTimeout(() => {
+    icon.textContent = original;
+    icon.classList.remove('icon-copied');
+  }, 1000);
+}
+
+function copyBuild(event) {
   if (!buildState) return;
   const text = formatBuildText();
+  const trigger = event?.currentTarget;
   navigator.clipboard.writeText(text).then(() => {
-    showToast('Copied to clipboard!');
+    showToast('Copied');
+    flashCopyCheck(trigger);
   }).catch(() => {
-    showToast('Failed to copy');
+    showToast('Copy failed');
   });
 }
 
@@ -787,10 +1149,11 @@ function formatBuildText() {
 // Screenshot
 // ============================================
 
-async function saveScreenshot() {
+async function saveScreenshot(event) {
   const container = document.getElementById('results-container');
+  const trigger = event?.currentTarget;
   if (!container || typeof html2canvas === 'undefined') {
-    showToast('Screenshot not available');
+    showToast('Screenshot failed');
     return;
   }
 
@@ -809,7 +1172,8 @@ async function saveScreenshot() {
       a.download = `pocket-dystopia-${Date.now()}.png`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast('Screenshot saved!');
+      showToast('Screenshot saved');
+      flashCopyCheck(trigger);
     }, 'image/png');
   } catch {
     showToast('Screenshot failed');
@@ -834,26 +1198,135 @@ function decodeBuild(code) {
   }
 }
 
+// URL-safe base64 — some platforms mangle + / = in query strings and fragments.
+function toUrlSafeBase64(code) {
+  return code.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromUrlSafeBase64(urlSafe) {
+  let s = urlSafe.replace(/-/g, '+').replace(/_/g, '/');
+  // Restore = padding to a multiple of 4.
+  while (s.length % 4 !== 0) s += '=';
+  return s;
+}
+
+function buildShareUrl(state) {
+  const code = encodeBuild(state);
+  const safe = toUrlSafeBase64(code);
+  return `${location.origin}${location.pathname}#build=${safe}`;
+}
+
+function tryLoadFromHash() {
+  const hash = window.location.hash || '';
+  const match = hash.match(/^#build=(.+)$/);
+  if (!match) return false;
+
+  const decoded = decodeBuild(fromUrlSafeBase64(match[1]));
+  // Always strip the hash so a reload doesn't re-trigger, even on failure.
+  // Use window.history explicitly — `history` is shadowed by the undo stack.
+  window.history.replaceState(null, '', window.location.pathname);
+
+  if (!decoded) {
+    // Delay the toast so it doesn't fire before the intro paints.
+    setTimeout(() => showToast("That build code didn't work. Starting fresh."), 300);
+    return false;
+  }
+
+  buildState = decoded;
+  isFirstRoll = false;
+  saveBuildState();
+  showResults();
+  renderCards();
+  return true;
+}
+
 function openShareModal() {
   if (!buildState) return;
   const code = encodeBuild(buildState);
   document.getElementById('share-code').value = code;
-  document.getElementById('share-modal').classList.add('active');
+
+  // Show Web Share button only if the browser supports the API.
+  const webShareBtn = document.getElementById('share-web-share');
+  if (webShareBtn) {
+    webShareBtn.hidden = typeof navigator.share !== 'function';
+  }
+
+  // Collapse the "Or share as code" disclosure by default.
+  const disclosure = document.getElementById('share-code-disclosure');
+  const codeBlock = document.getElementById('share-code-block');
+  if (disclosure && codeBlock) {
+    disclosure.setAttribute('aria-expanded', 'false');
+    codeBlock.hidden = true;
+  }
+
+  openModal(document.getElementById('share-modal'));
 }
 
 function closeShareModal() {
-  document.getElementById('share-modal').classList.remove('active');
+  closeModal(document.getElementById('share-modal'));
 }
 
-function copyShareCode() {
+function toggleShareCodeDisclosure() {
+  const disclosure = document.getElementById('share-code-disclosure');
+  const codeBlock = document.getElementById('share-code-block');
+  if (!disclosure || !codeBlock) return;
+  const expanded = disclosure.getAttribute('aria-expanded') === 'true';
+  const next = !expanded;
+  disclosure.setAttribute('aria-expanded', String(next));
+  codeBlock.hidden = !next;
+}
+
+async function shareViaWebShareApi() {
+  if (!buildState || typeof navigator.share !== 'function') return;
+  const url = buildShareUrl(buildState);
+  try {
+    await navigator.share({
+      title: 'Pocket Dystopia — my build',
+      text: "Here's a dystopian story seed I rolled.",
+      url,
+    });
+  } catch {
+    // User cancelled or share failed — silently ignore.
+  }
+}
+
+function copyShareLink(event) {
+  if (!buildState) return;
+  const url = buildShareUrl(buildState);
+  const trigger = event?.currentTarget;
+  navigator.clipboard.writeText(url).then(() => {
+    showToast('Link copied');
+    flashCopyCheck(trigger);
+  }).catch(() => {
+    showToast('Copy failed');
+  });
+}
+
+function copyShareCode(event) {
   const textarea = document.getElementById('share-code');
+  const trigger = event?.currentTarget;
   navigator.clipboard.writeText(textarea.value).then(() => {
-    showToast('Code copied!');
+    showToast('Code copied');
+    flashCopyCheck(trigger);
   }).catch(() => {
     textarea.select();
     document.execCommand('copy');
-    showToast('Code copied!');
+    showToast('Code copied');
   });
+}
+
+function toggleLoadDisclosure() {
+  const btn = document.getElementById('intro-load-disclosure');
+  const body = document.getElementById('intro-load-body');
+  if (!btn || !body) return;
+  const expanded = btn.getAttribute('aria-expanded') === 'true';
+  const next = !expanded;
+  btn.setAttribute('aria-expanded', String(next));
+  body.hidden = !next;
+  if (next) {
+    // Autofocus the input once the disclosure opens so the user can paste.
+    setTimeout(() => document.getElementById('load-input')?.focus(), 0);
+  }
 }
 
 function loadBuildFromInput() {
@@ -910,11 +1383,22 @@ function loadSavedState() {
 // ============================================
 
 function confirmReset() {
-  document.getElementById('confirm-overlay').classList.add('active');
+  openModal(document.getElementById('confirm-overlay'));
 }
 
 function closeConfirm() {
-  document.getElementById('confirm-overlay').classList.remove('active');
+  const overlay = document.getElementById('confirm-overlay');
+  closeModal(overlay);
+  // If the dialog was in pin-delete mode, restore the default reset wiring.
+  if (overlay.dataset.mode === 'pin-delete') {
+    delete overlay.dataset.mode;
+    pendingDeleteIndex = null;
+    const yes = document.getElementById('confirm-yes');
+    if (yes) {
+      yes.textContent = 'Clear it';
+      yes.onclick = executeReset;
+    }
+  }
 }
 
 function executeReset() {
@@ -934,12 +1418,26 @@ let toastTimeout = null;
 
 function showToast(message) {
   const toast = document.getElementById('toast');
+  // Clear then set so an identical string is re-announced by live regions.
+  toast.textContent = '';
+  // Force reflow before re-setting so AT treats it as a new message.
+  void toast.offsetWidth;
   toast.textContent = message;
   toast.classList.add('visible');
   if (toastTimeout) clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => {
     toast.classList.remove('visible');
   }, 2000);
+}
+
+// Silent announcement for non-visual state changes (lock toggles, logline
+// updates). Same clear-then-set pattern so duplicates re-announce.
+function announce(message) {
+  const el = document.getElementById('sr-announce');
+  if (!el) return;
+  el.textContent = '';
+  void el.offsetWidth;
+  el.textContent = message;
 }
 
 // ============================================
@@ -995,6 +1493,556 @@ function initKeyboard() {
     if (e.key === 'Escape') {
       closeShareModal();
       closeConfirm();
+      closePinnedPanel();
+      closeShortcutsPanel();
+      closeMoreMenu();
+    }
+  });
+}
+
+// ============================================
+// Home / Pinned Panel stubs
+// ============================================
+
+// Non-destructive home: goes back to the intro without touching the saved build.
+// Phase 8 will add the resume row; for now the intro just reappears.
+function goHome() {
+  closeMoreMenu();
+  showIntro();
+}
+
+// ============================================
+// Pinned Builds (6-slot system)
+// ============================================
+
+const PINS_KEY = 'pocket-dystopia-pins';
+const PIN_SLOTS = 6;
+let pinnedReplaceMode = false;
+
+function loadPins() {
+  try {
+    const raw = localStorage.getItem(PINS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.slots) && parsed.slots.length === PIN_SLOTS) {
+        return parsed;
+      }
+    }
+  } catch {
+    // Ignore, fall through to default.
+  }
+  return { version: 1, slots: Array(PIN_SLOTS).fill(null) };
+}
+
+function savePins(pins) {
+  localStorage.setItem(PINS_KEY, JSON.stringify(pins));
+}
+
+function defaultPinLabel(state) {
+  const text = state?.sections?.hero?.traits?.[0]?.text || 'Build';
+  return text.length > 40 ? text.slice(0, 40) + '…' : text;
+}
+
+function relativeTime(ts) {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
+
+function openPinnedPanel() {
+  pinnedReplaceMode = false;
+  renderPinnedSlots();
+  openModal(document.getElementById('pinned-modal'));
+}
+
+function closePinnedPanel() {
+  closeModal(document.getElementById('pinned-modal'));
+  pinnedReplaceMode = false;
+}
+
+function cancelReplaceMode() {
+  pinnedReplaceMode = false;
+  renderPinnedSlots();
+}
+
+function renderPinnedSlots() {
+  const container = document.getElementById('pinned-slots');
+  const description = document.getElementById('pinned-description');
+  const actions = document.getElementById('pinned-modal-actions');
+  if (!container || !description) return;
+
+  const pins = loadPins();
+  const filled = pins.slots.filter(s => s !== null);
+  const allEmpty = filled.length === 0;
+  const allFull = filled.length === PIN_SLOTS;
+
+  if (pinnedReplaceMode) {
+    description.textContent = 'All 6 slots are full. Pick one to replace.';
+    if (actions) actions.hidden = false;
+  } else if (allEmpty) {
+    description.textContent = 'Six slots for builds you want to keep. Tap + to pin the current one.';
+    if (actions) actions.hidden = true;
+  } else {
+    description.textContent = '';
+    if (actions) actions.hidden = true;
+  }
+
+  container.innerHTML = pins.slots.map((slot, i) => renderPinSlot(slot, i, pinnedReplaceMode)).join('');
+}
+
+function renderPinSlot(slot, index, replaceMode) {
+  if (!slot) {
+    const disabled = !buildState;
+    const disabledClass = disabled ? ' disabled' : '';
+    const title = disabled ? 'Roll something first' : 'Pin current build';
+    return `
+      <button type="button" class="pin-slot pin-slot-empty${disabledClass}"
+        onclick="pinCurrentToSlot(${index})"
+        ${disabled ? 'disabled' : ''}
+        aria-label="${title}"
+        title="${title}">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span>
+      </button>
+    `;
+  }
+
+  const label = escapeHtml(slot.label || defaultPinLabel(slot.state));
+  const when = relativeTime(slot.createdAt);
+
+  if (replaceMode) {
+    return `
+      <button type="button" class="pin-slot pin-slot-filled pin-slot-replace"
+        onclick="replaceSlot(${index})"
+        aria-label="Replace slot ${index + 1}"
+        title="Replace this one">
+        <span class="pin-slot-label">${label}</span>
+        <span class="pin-slot-time">${when}</span>
+        <span class="pin-slot-replace-overlay">Replace this one</span>
+      </button>
+    `;
+  }
+
+  return `
+    <div class="pin-slot pin-slot-filled" data-slot="${index}">
+      <div class="pin-slot-body">
+        <div class="pin-slot-label-row">
+          <span class="pin-slot-label" data-pin-label="${index}">${label}</span>
+          <input type="text" class="pin-slot-label-input" data-pin-input="${index}"
+            value="${label}" placeholder="Name this build" hidden>
+        </div>
+        <span class="pin-slot-time">${when}</span>
+      </div>
+      <div class="pin-slot-actions">
+        <button type="button" class="btn-secondary pin-slot-load" onclick="loadPin(${index})">
+          <span>Load</span>
+          <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+        </button>
+        <button type="button" class="btn-icon" onclick="startRenamePin(${index})"
+          aria-label="Rename slot ${index + 1}" title="Rename">
+          <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+        </button>
+        <button type="button" class="btn-icon" onclick="confirmDeletePin(${index})"
+          aria-label="Delete slot ${index + 1}" title="Delete">
+          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function pinCurrentToSlot(index) {
+  if (!buildState) return;
+  const pins = loadPins();
+  if (pins.slots[index] !== null) {
+    // Shouldn't happen (button is only rendered for empty slots) but guard anyway.
+    return;
+  }
+  pins.slots = pins.slots.map((s, i) => i === index ? {
+    state: JSON.parse(JSON.stringify(buildState)),
+    label: defaultPinLabel(buildState),
+    createdAt: Date.now(),
+  } : s);
+  savePins(pins);
+  renderPinnedSlots();
+  showToast(`Pinned to slot ${index + 1}`);
+}
+
+function replaceSlot(index) {
+  if (!buildState) return;
+  const pins = loadPins();
+  pins.slots = pins.slots.map((s, i) => i === index ? {
+    state: JSON.parse(JSON.stringify(buildState)),
+    label: defaultPinLabel(buildState),
+    createdAt: Date.now(),
+  } : s);
+  savePins(pins);
+  pinnedReplaceMode = false;
+  renderPinnedSlots();
+  showToast(`Replaced slot ${index + 1}`);
+}
+
+function loadPin(index) {
+  const pins = loadPins();
+  const slot = pins.slots[index];
+  if (!slot) return;
+  pushHistory();
+  buildState = JSON.parse(JSON.stringify(slot.state));
+  isFirstRoll = false;
+  saveBuildState();
+  closePinnedPanel();
+  showResults();
+  renderCards();
+  showToast(`Loaded pin ${index + 1}`);
+}
+
+function startRenamePin(index) {
+  const labelEl = document.querySelector(`[data-pin-label="${index}"]`);
+  const inputEl = document.querySelector(`[data-pin-input="${index}"]`);
+  if (!labelEl || !inputEl) return;
+  labelEl.hidden = true;
+  inputEl.hidden = false;
+  inputEl.focus();
+  inputEl.select();
+
+  const commit = () => {
+    const newLabel = inputEl.value.trim() || defaultPinLabel(loadPins().slots[index]?.state);
+    const pins = loadPins();
+    pins.slots = pins.slots.map((s, i) => i === index && s ? { ...s, label: newLabel } : s);
+    savePins(pins);
+    renderPinnedSlots();
+  };
+
+  inputEl.addEventListener('blur', commit, { once: true });
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      inputEl.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      inputEl.value = labelEl.textContent;
+      inputEl.blur();
+    }
+  });
+}
+
+let pendingDeleteIndex = null;
+
+function confirmDeletePin(index) {
+  pendingDeleteIndex = index;
+  const overlay = document.getElementById('confirm-overlay');
+  const msg = document.getElementById('confirm-msg');
+  const yes = document.getElementById('confirm-yes');
+  if (msg) msg.textContent = "This slot will be empty again. Your other pins and your current build aren't affected.";
+  if (yes) {
+    yes.textContent = 'Delete';
+    yes.onclick = executePinDelete;
+  }
+  overlay.classList.add('active');
+  overlay.dataset.mode = 'pin-delete';
+}
+
+function executePinDelete() {
+  if (pendingDeleteIndex === null) return;
+  const pins = loadPins();
+  pins.slots = pins.slots.map((s, i) => i === pendingDeleteIndex ? null : s);
+  savePins(pins);
+  pendingDeleteIndex = null;
+  // Restore the confirm dialog to its default (reset) wiring.
+  const yes = document.getElementById('confirm-yes');
+  if (yes) {
+    yes.textContent = 'Clear it';
+    yes.onclick = executeReset;
+  }
+  closeConfirm();
+  renderPinnedSlots();
+  showToast('Unpinned');
+}
+
+// Invoked from the top-bar Pin button AND from the P keyboard shortcut.
+// `mode === 'pin'` triggers the pin-current flow.
+function openPinnedPanelForPinning() {
+  if (!buildState) {
+    // No current build to pin — fall through to the view mode so the user
+    // can still browse existing pins (all will be empty on fresh install).
+    openPinnedPanel();
+    return;
+  }
+  const pins = loadPins();
+  const firstEmpty = pins.slots.findIndex(s => s === null);
+  if (firstEmpty === -1) {
+    pinnedReplaceMode = true;
+    renderPinnedSlots();
+    openModal(document.getElementById('pinned-modal'));
+    showToast('All 6 slots are full. Pick one to replace.');
+  } else {
+    openPinnedPanel();
+  }
+}
+
+// ============================================
+// More Menu
+// ============================================
+
+let moreMenuOpen = false;
+
+function toggleMoreMenu(event) {
+  if (event) event.stopPropagation();
+  if (moreMenuOpen) closeMoreMenu();
+  else openMoreMenu();
+}
+
+function openMoreMenu() {
+  const menu = document.getElementById('more-menu');
+  const btn = document.getElementById('btn-more');
+  if (!menu || !btn) return;
+  menu.hidden = false;
+  moreMenuOpen = true;
+  btn.setAttribute('aria-expanded', 'true');
+  updateMoreMenuState();
+  // Focus the first visible menu item for keyboard users.
+  const firstItem = menu.querySelector('[role="menuitem"]:not([hidden]), [role="menuitemcheckbox"]:not([hidden])');
+  if (firstItem) firstItem.focus();
+}
+
+function closeMoreMenu() {
+  const menu = document.getElementById('more-menu');
+  const btn = document.getElementById('btn-more');
+  if (!menu || !btn) return;
+  if (!moreMenuOpen) return;
+  menu.hidden = true;
+  moreMenuOpen = false;
+  btn.setAttribute('aria-expanded', 'false');
+}
+
+function handleMenuAction(action) {
+  switch (action) {
+    case 'theme':
+      toggleTheme();
+      closeMoreMenu();
+      return;
+    case 'lefthanded':
+      toggleLeftHanded();
+      // Keep the menu open so the user can see the checked state flip.
+      return;
+    case 'shortcuts':
+      closeMoreMenu();
+      openShortcutsPanel();
+      return;
+    case 'clear':
+      closeMoreMenu();
+      confirmReset();
+      return;
+  }
+}
+
+// ============================================
+// Modal Focus Management (a11y)
+// ============================================
+//
+// For each open modal we remember the trigger element, move focus to the
+// first focusable inside, and restore focus on close. Tab / Shift+Tab are
+// trapped inside the modal to respect aria-modal="true".
+
+const modalFocusStack = [];
+
+function getFocusable(root) {
+  if (!root) return [];
+  return Array.from(root.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter(el => el.offsetParent !== null);
+}
+
+function openModal(modalEl) {
+  if (!modalEl) return;
+  const trigger = document.activeElement;
+  modalFocusStack.push({ modalEl, trigger });
+  modalEl.classList.add('active');
+  // Move initial focus to first focusable inside (fallback: the modal itself).
+  const focusables = getFocusable(modalEl);
+  const target = focusables[0] || modalEl;
+  // Defer so display flip has settled.
+  setTimeout(() => target.focus?.(), 0);
+}
+
+function closeModal(modalEl) {
+  if (!modalEl) return;
+  modalEl.classList.remove('active');
+  const idx = modalFocusStack.findIndex(f => f.modalEl === modalEl);
+  if (idx === -1) return;
+  const { trigger } = modalFocusStack[idx];
+  modalFocusStack.splice(idx, 1);
+  // Restore focus to the trigger that opened the modal.
+  if (trigger && typeof trigger.focus === 'function') {
+    setTimeout(() => trigger.focus(), 0);
+  }
+}
+
+function trapTab(e, modalEl) {
+  if (e.key !== 'Tab') return;
+  const focusables = getFocusable(modalEl);
+  if (focusables.length === 0) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+function initModalFocusTrap() {
+  const modals = ['share-modal', 'pinned-modal', 'shortcuts-modal', 'confirm-overlay'];
+  for (const id of modals) {
+    const m = document.getElementById(id);
+    if (!m) continue;
+    m.addEventListener('keydown', (e) => {
+      if (m.classList.contains('active')) trapTab(e, m);
+    });
+  }
+}
+
+// ============================================
+// Keyboard Shortcuts (phase 9)
+// ============================================
+
+function openShortcutsPanel() {
+  openModal(document.getElementById('shortcuts-modal'));
+}
+
+function closeShortcutsPanel() {
+  closeModal(document.getElementById('shortcuts-modal'));
+}
+
+function anyModalOpen() {
+  return !!(
+    document.getElementById('share-modal')?.classList.contains('active') ||
+    document.getElementById('confirm-overlay')?.classList.contains('active') ||
+    document.getElementById('pinned-modal')?.classList.contains('active') ||
+    document.getElementById('shortcuts-modal')?.classList.contains('active')
+  );
+}
+
+function initShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // Never hijack modifier combos — they belong to the browser.
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    // Ignore keys typed into inputs / textareas / contenteditable.
+    const target = e.target;
+    if (target && (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.isContentEditable
+    )) {
+      return;
+    }
+
+    const key = e.key;
+
+    // `?` always works (even with modals open), and Escape is handled elsewhere.
+    if (key === '?') {
+      e.preventDefault();
+      openShortcutsPanel();
+      return;
+    }
+
+    // Suppress most shortcuts when any modal is open.
+    if (anyModalOpen()) return;
+    // Also suppress while the results screen isn't the active one (intro).
+    const resultsActive = document.getElementById('results-screen')?.classList.contains('active');
+    if (!resultsActive) return;
+
+    switch (key) {
+      case 'r': case 'R':
+        e.preventDefault();
+        rollDie();
+        return;
+      case 'z': case 'Z':
+        e.preventDefault();
+        if (history.length === 0) {
+          showToast('Nothing to undo');
+        } else {
+          undo();
+        }
+        return;
+      case 'c': case 'C':
+        e.preventDefault();
+        copyBuild();
+        return;
+      case 's': case 'S':
+        e.preventDefault();
+        openShareModal();
+        return;
+      case 'p': case 'P':
+        e.preventDefault();
+        openPinnedPanelForPinning();
+        return;
+      case 'l': case 'L':
+        e.preventDefault();
+        toggleTheme();
+        return;
+      case '1': case '2': case '3': case '4': case '5': {
+        e.preventDefault();
+        const keys = ['hero', 'villain', 'squad', 'setting', 'obstacles'];
+        const idx = Number(key) - 1;
+        if (keys[idx]) rerollSection(keys[idx]);
+        return;
+      }
+    }
+  });
+}
+
+function initMoreMenu() {
+  const menu = document.getElementById('more-menu');
+  if (!menu) return;
+
+  // Arrow-key navigation inside the menu.
+  menu.addEventListener('keydown', (e) => {
+    const items = Array.from(menu.querySelectorAll('[role="menuitem"], [role="menuitemcheckbox"]'))
+      .filter(i => !i.disabled && i.offsetParent !== null);
+    if (items.length === 0) return;
+    const current = document.activeElement;
+    const idx = items.indexOf(current);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = items[(idx + 1) % items.length];
+      if (next) next.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = items[(idx - 1 + items.length) % items.length];
+      if (prev) prev.focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      items[0].focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      items[items.length - 1].focus();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMoreMenu();
+      const btn = document.getElementById('btn-more');
+      if (btn) btn.focus();
+    }
+  });
+
+  // Close when the user clicks anywhere outside the menu or its trigger.
+  document.addEventListener('click', (e) => {
+    if (!moreMenuOpen) return;
+    const m = document.getElementById('more-menu');
+    const btn = document.getElementById('btn-more');
+    if (m && !m.contains(e.target) && btn && !btn.contains(e.target)) {
+      closeMoreMenu();
     }
   });
 }
@@ -1010,6 +2058,12 @@ function initModals() {
   document.getElementById('confirm-overlay')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeConfirm();
   });
+  document.getElementById('pinned-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closePinnedPanel();
+  });
+  document.getElementById('shortcuts-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeShortcutsPanel();
+  });
 }
 
 // ============================================
@@ -1020,8 +2074,16 @@ function init() {
   applyPrefs();
   initKeyboard();
   initModals();
+  initModalFocusTrap();
+  initMoreMenu();
+  initShortcuts();
+  initMoodCombobox();
   initShakeDetection();
   startRollIconCycle();
+
+  // Priority: URL hash share > saved state > fresh intro.
+  // Hash-loads skip the CRT boot animation because it isn't a "roll".
+  if (tryLoadFromHash()) return;
 
   const saved = loadSavedState();
   if (saved) {

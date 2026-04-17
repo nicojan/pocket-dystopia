@@ -45,25 +45,43 @@
     <h1 class="text-display">POCKET DYSTOPIA</h1>
     <p class="intro-subtitle text-body">
       Roll a satirical dystopian seed.<br>
-      Lock what you love.<br>
-      Re-roll the rest.
+      Lock what you love, re-roll the rest.
     </p>
 
-    <div class="die-container" id="die-container" onclick="rollDie()" role="button" tabindex="0" aria-label="Roll the die to generate a story seed">
+    <div class="die-container" id="die-container" onclick="rollDie()" role="button" tabindex="0" aria-label="Roll the die">
       <div class="die-wrapper">
         <div class="die-shape" id="die-face" aria-hidden="true"></div>
       </div>
-      <p class="die-hint">tap to roll</p>
+      <p class="die-hint" aria-hidden="true">
+        <span class="die-hint-touch">tap to roll</span>
+        <span class="die-hint-pointer">click to roll</span>
+      </p>
+    </div>
+
+    <div class="intro-resume" id="intro-resume" hidden>
+      <p class="intro-resume-label">You have a build in progress.</p>
+      <div class="intro-resume-actions">
+        <button class="btn-primary" onclick="resumeBuild()">Resume</button>
+        <button class="btn-secondary" onclick="confirmReset()">Clear it</button>
+      </div>
     </div>
 
     <div class="intro-load">
-      <label for="load-input" class="sr-only">Build code</label>
-      <input type="text" id="load-input" placeholder="Paste a build code to restore..." autocomplete="off" spellcheck="false">
-      <button class="btn-secondary" id="load-btn" onclick="loadBuildFromInput()">
-        <span class="material-symbols-outlined" aria-hidden="true">upload</span>
-        Load
+      <button type="button" class="intro-load-disclosure" id="intro-load-disclosure"
+        aria-expanded="false" aria-controls="intro-load-body"
+        onclick="toggleLoadDisclosure()">
+        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+        Have a build code?
       </button>
-      <div class="error-msg" id="load-error" role="alert" aria-live="polite"></div>
+      <div id="intro-load-body" class="intro-load-body" hidden>
+        <label for="load-input" class="sr-only">Build code</label>
+        <input type="text" id="load-input" placeholder="Paste a build code..." autocomplete="off" spellcheck="false">
+        <button class="btn-secondary" id="load-btn" onclick="loadBuildFromInput()">
+          <span class="material-symbols-outlined" aria-hidden="true">upload</span>
+          Load
+        </button>
+        <div class="error-msg" id="load-error" role="alert" aria-live="polite"></div>
+      </div>
     </div>
 
     <div class="footer">
@@ -75,31 +93,51 @@
   <div id="results-screen" class="results-screen" aria-live="polite">
     <header class="top-bar app-container">
       <div class="top-bar-left">
-        <button class="top-bar-title" type="button" onclick="confirmReset()" aria-label="Reset build and return to the home screen">POCKET DYSTOPIA</button>
+        <button class="top-bar-title" type="button" onclick="goHome()" aria-label="Back to start">POCKET DYSTOPIA</button>
       </div>
       <div class="top-bar-right">
-        <button class="btn-icon btn-home-mobile" id="btn-home" onclick="confirmReset()" aria-label="Reset build and return to the home screen">
+        <button class="btn-icon btn-home-mobile" id="btn-home" onclick="goHome()" aria-label="Back to start" title="Back to start">
           <span class="material-symbols-outlined" aria-hidden="true">home</span>
         </button>
-        <button class="btn-icon" id="btn-undo" onclick="undo()" aria-label="Undo last roll" disabled>
+        <button class="btn-icon btn-undo" id="btn-undo" onclick="undo()" aria-label="Undo last roll" title="Undo last roll" disabled>
           <span class="material-symbols-outlined" aria-hidden="true">undo</span>
+          <span class="btn-undo-label" aria-hidden="true">Undo roll</span>
         </button>
-        <button class="btn-icon" id="btn-copy" onclick="copyBuild()" aria-label="Copy build to clipboard">
-          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
-        </button>
-        <button class="btn-icon" id="btn-save" onclick="saveScreenshot()" aria-label="Save screenshot">
-          <span class="material-symbols-outlined" aria-hidden="true">download</span>
-        </button>
-        <button class="btn-icon" id="btn-share" onclick="openShareModal()" aria-label="Share build code">
+        <button class="btn-icon" id="btn-share" onclick="openShareModal()" aria-label="Share this build" title="Share this build">
           <span class="material-symbols-outlined" aria-hidden="true">share</span>
         </button>
-        <button class="btn-icon" id="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme">
-          <span class="material-symbols-outlined" id="theme-icon" aria-hidden="true">light_mode</span>
+        <button class="btn-icon" id="btn-pinned" onclick="openPinnedPanel()" aria-label="Pinned builds" title="Pinned builds">
+          <span class="material-symbols-outlined" aria-hidden="true">push_pin</span>
         </button>
-        <button class="btn-icon" id="btn-left-hand" onclick="toggleLeftHanded()" aria-label="Toggle left-handed mode" aria-pressed="false">
-          <span class="material-symbols-outlined" aria-hidden="true">back_hand</span>
-        </button>
-        <button class="btn-primary" id="btn-roll-all" onclick="rollDie()" aria-label="Roll all sections">
+        <div class="more-menu-wrapper">
+          <button class="btn-icon" id="btn-more" type="button" onclick="toggleMoreMenu(event)"
+            aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu"
+            aria-label="More options" title="More options">
+            <span class="material-symbols-outlined" aria-hidden="true">more_vert</span>
+          </button>
+          <div id="more-menu" class="more-menu" role="menu" aria-labelledby="btn-more" hidden>
+            <button class="more-menu-item" role="menuitem" type="button" onclick="handleMenuAction('theme')">
+              <span class="material-symbols-outlined" aria-hidden="true" id="more-theme-icon">light_mode</span>
+              <span class="more-menu-label" id="more-theme-label">Light mode</span>
+            </button>
+            <button class="more-menu-item more-menu-lefthand" role="menuitemcheckbox" type="button"
+              onclick="handleMenuAction('lefthanded')" aria-checked="false">
+              <span class="material-symbols-outlined" aria-hidden="true">back_hand</span>
+              <span class="more-menu-label">Left-handed layout</span>
+              <span class="material-symbols-outlined more-menu-check" aria-hidden="true">check</span>
+            </button>
+            <button class="more-menu-item" role="menuitem" type="button" onclick="handleMenuAction('shortcuts')">
+              <span class="material-symbols-outlined" aria-hidden="true">keyboard</span>
+              <span class="more-menu-label">Keyboard shortcuts</span>
+            </button>
+            <div class="more-menu-divider" role="separator"></div>
+            <button class="more-menu-item more-menu-destructive" role="menuitem" type="button" onclick="handleMenuAction('clear')">
+              <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+              <span class="more-menu-label">Clear this build</span>
+            </button>
+          </div>
+        </div>
+        <button class="btn-primary" id="btn-roll-all" onclick="rollDie()" aria-label="Roll all" title="Roll all">
           <span class="roll-die-icon" id="roll-die-icon" aria-hidden="true"></span>
           <span class="sr-only">Roll</span>
         </button>
@@ -107,22 +145,56 @@
     </header>
 
     <main id="main-content" class="app-container">
+      <h1 class="sr-only">Your build</h1>
       <div class="controls-bar">
         <div class="view-toggle" role="group" aria-label="View mode">
           <button id="btn-expanded" class="active" onclick="setView('expanded')" aria-pressed="true">Expanded</button>
           <button id="btn-compressed" onclick="setView('compressed')" aria-pressed="false">Compressed</button>
         </div>
-        <div class="mood-select">
-          <span class="material-symbols-outlined" aria-hidden="true" style="color: var(--text-secondary)">tune</span>
-          <label for="mood-filter" class="sr-only">Mood filter</label>
-          <select id="mood-filter" onchange="setMood(this.value)">
-            <option value="all">All Moods</option>
-            <option value="corporate">Corporate Dystopia</option>
-            <option value="post-apocalyptic">Post-Apocalyptic</option>
-            <option value="ai-takeover">AI Takeover</option>
-            <option value="political">Political Satire</option>
-          </select>
+        <div class="mood-combobox-wrapper">
+          <span class="material-symbols-outlined mood-combobox-icon" aria-hidden="true">tune</span>
+          <button type="button" class="mood-combobox" id="mood-combobox"
+            role="combobox" aria-haspopup="listbox" aria-expanded="false"
+            aria-controls="mood-listbox" aria-label="Mood filter"
+            onclick="toggleMoodListbox(event)">
+            <span id="mood-combobox-label">All moods</span>
+            <span class="material-symbols-outlined mood-combobox-chevron" aria-hidden="true">expand_more</span>
+          </button>
+          <ul id="mood-listbox" class="mood-listbox" role="listbox" aria-label="Mood filter" hidden>
+            <li class="mood-option" role="option" data-mood="all" tabindex="-1" onclick="selectMood('all')">
+              <span class="material-symbols-outlined mood-option-check" aria-hidden="true">check</span>
+              <span>All moods</span>
+            </li>
+            <li class="mood-option" role="option" data-mood="corporate" tabindex="-1" onclick="selectMood('corporate')">
+              <span class="material-symbols-outlined mood-option-check" aria-hidden="true">check</span>
+              <span>Corporate dystopia</span>
+            </li>
+            <li class="mood-option" role="option" data-mood="post-apocalyptic" tabindex="-1" onclick="selectMood('post-apocalyptic')">
+              <span class="material-symbols-outlined mood-option-check" aria-hidden="true">check</span>
+              <span>Post-apocalyptic</span>
+            </li>
+            <li class="mood-option" role="option" data-mood="ai-takeover" tabindex="-1" onclick="selectMood('ai-takeover')">
+              <span class="material-symbols-outlined mood-option-check" aria-hidden="true">check</span>
+              <span>AI takeover</span>
+            </li>
+            <li class="mood-option" role="option" data-mood="political" tabindex="-1" onclick="selectMood('political')">
+              <span class="material-symbols-outlined mood-option-check" aria-hidden="true">check</span>
+              <span>Political satire</span>
+            </li>
+          </ul>
         </div>
+      </div>
+
+      <!-- Logline: one-line stitched summary of the build. Rendered by
+           renderLogline() in app.js whenever its source traits change. -->
+      <div id="logline-container" class="logline-container" hidden>
+        <div class="logline-box">
+          <p id="logline-text" class="logline-text"></p>
+        </div>
+        <button type="button" class="logline-copy-btn" onclick="copyLogline(event)">
+          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+          Copy logline
+        </button>
       </div>
 
       <div id="results-container" class="cards-grid">
@@ -135,39 +207,118 @@
     </div>
   </div>
 
-  <!-- ===== SHARE MODAL ===== -->
+  <!-- ===== SHARE MODAL (export hub) ===== -->
   <div id="share-modal" class="modal-overlay" role="dialog" aria-labelledby="modal-title" aria-modal="true">
     <div class="modal">
       <div class="modal-header">
-        <h2 class="modal-title" id="modal-title">SAVE YOUR BUILD</h2>
+        <h2 class="modal-title" id="modal-title">Share this build</h2>
         <button class="btn-icon" onclick="closeShareModal()" aria-label="Close dialog">
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
-      <p class="text-caption" style="color: var(--text-secondary); margin-bottom: var(--space-md);">Your build code:</p>
-      <textarea id="share-code" readonly aria-label="Build code"></textarea>
-      <div class="modal-actions">
-        <button class="btn-primary" onclick="copyShareCode()">
-          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
-          Copy Code
+      <p class="text-caption share-description">Send a link or a code. Either one restores the build exactly.</p>
+
+      <div class="share-actions">
+        <button class="btn-secondary share-action-btn" id="share-web-share" onclick="shareViaWebShareApi()" hidden>
+          <span class="material-symbols-outlined" aria-hidden="true">share</span>
+          Share...
         </button>
+        <button class="btn-primary share-action-btn" onclick="copyShareLink(event)">
+          <span class="material-symbols-outlined" aria-hidden="true">link</span>
+          Copy link
+        </button>
+        <button class="btn-secondary share-action-btn" onclick="copyBuild(event)">
+          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+          Copy as text
+        </button>
+        <button class="btn-secondary share-action-btn" onclick="saveScreenshot(event)">
+          <span class="material-symbols-outlined" aria-hidden="true">download</span>
+          Save as image
+        </button>
+      </div>
+
+      <button type="button" class="share-code-disclosure" id="share-code-disclosure"
+        aria-expanded="false" aria-controls="share-code-block"
+        onclick="toggleShareCodeDisclosure()">
+        <span class="material-symbols-outlined share-code-chevron" aria-hidden="true">chevron_right</span>
+        Or share as code
+      </button>
+
+      <div id="share-code-block" class="share-code-block" hidden>
+        <!-- The code is base64 noise — read-only, not meant to be read aloud.
+             Screen-reader users should use the Copy code button instead. -->
+        <textarea id="share-code" readonly aria-label="Build code (copy with the Copy code button)" tabindex="-1"></textarea>
+        <button class="btn-secondary share-action-btn" onclick="copyShareCode(event)">
+          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+          Copy code
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== KEYBOARD SHORTCUTS PANEL ===== -->
+  <div id="shortcuts-modal" class="modal-overlay" role="dialog" aria-labelledby="shortcuts-title" aria-modal="true">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="shortcuts-title">Keyboard shortcuts</h2>
+        <button class="btn-icon" onclick="closeShortcutsPanel()" aria-label="Close dialog">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <p class="text-caption share-description">For when you're rolling a lot.</p>
+
+      <dl class="shortcuts-list">
+        <div class="shortcut-row"><dt><kbd>R</kbd></dt><dd>Roll all</dd></div>
+        <div class="shortcut-row"><dt><kbd>Z</kbd></dt><dd>Undo</dd></div>
+        <div class="shortcut-row"><dt><kbd>C</kbd></dt><dd>Copy as text</dd></div>
+        <div class="shortcut-row"><dt><kbd>S</kbd></dt><dd>Share</dd></div>
+        <div class="shortcut-row"><dt><kbd>P</kbd></dt><dd>Pin current build</dd></div>
+        <div class="shortcut-row"><dt><kbd>L</kbd></dt><dd>Toggle light / dark</dd></div>
+        <div class="shortcut-row"><dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Re-roll card 1 through 5</dd></div>
+        <div class="shortcut-row"><dt><kbd>?</kbd></dt><dd>Show this panel</dd></div>
+        <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Close any open panel</dd></div>
+      </dl>
+
+      <div class="modal-actions">
+        <button class="btn-primary" onclick="closeShortcutsPanel()">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PINNED BUILDS PANEL ===== -->
+  <div id="pinned-modal" class="modal-overlay" role="dialog" aria-labelledby="pinned-title" aria-modal="true">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2 class="modal-title" id="pinned-title">Pinned builds</h2>
+        <button class="btn-icon" onclick="closePinnedPanel()" aria-label="Close dialog">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <p id="pinned-description" class="text-caption share-description"></p>
+      <div id="pinned-slots" class="pinned-slots"></div>
+      <div class="modal-actions" id="pinned-modal-actions" hidden>
+        <button class="btn-secondary" onclick="cancelReplaceMode()">Cancel</button>
       </div>
     </div>
   </div>
 
   <!-- ===== CONFIRM DIALOG ===== -->
-  <div id="confirm-overlay" class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-msg">
+  <div id="confirm-overlay" class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
     <div class="confirm-dialog">
-      <p id="confirm-msg">Reset everything? This will clear your saved build.</p>
+      <h2 id="confirm-title" class="confirm-title">Clear this build?</h2>
+      <p id="confirm-msg">Your current roll and all your locks go away. Your pinned builds and settings stay.</p>
       <div class="confirm-actions">
-        <button class="btn-secondary" onclick="closeConfirm()">Cancel</button>
-        <button class="btn-primary" id="confirm-yes" onclick="executeReset()">Reset</button>
+        <button class="btn-secondary" onclick="closeConfirm()">Keep it</button>
+        <button class="btn-primary btn-destructive" id="confirm-yes" onclick="executeReset()">Clear it</button>
       </div>
     </div>
   </div>
 
   <!-- ===== TOAST ===== -->
-  <div id="toast" class="toast" aria-live="assertive"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Silent announcer for state changes that don't warrant a visible toast. -->
+  <div id="sr-announce" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
   <script src="data.js"></script>
   <script src="app.js"></script>

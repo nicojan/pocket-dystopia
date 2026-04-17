@@ -11,7 +11,9 @@
   --bg-overlay: #1E2329;
   --text-primary: #E6EDF3;
   --text-secondary: #8B949E;
-  --text-tertiary: #4A5568;
+  /* Bumped from #4A5568 (2.63:1) to #737B85 (~4.6:1 against --bg-primary)
+     to meet WCAG AA, while staying visibly dimmer than --text-secondary. */
+  --text-tertiary: #737B85;
   --text-inverse: #080A0D;
   --accent-cyan: #00E5FF;
   --accent-cyan-muted: #00ACC1;
@@ -24,13 +26,21 @@
   --accent-red-dim: #801A1A;
   --accent-green: #4ADE80;
   --accent-green-muted: #22C55E;
+
+  /* Role colors — Hero = growth/protagonist, Villain = danger/opposition */
+  --accent-hero: #4ADE80;
+  --accent-hero-muted: #22C55E;
+  --accent-villain: #FF4D4D;
+  --accent-villain-muted: #CC3333;
+
   --border-default: #30363D;
   --border-subtle: #21262D;
   --border-accent: #00E5FF;
 
-  /* Lock state — Apple HIG systemRed (dark) */
-  --accent-lock: #FF453A;
-  --accent-lock-glow: rgba(255, 69, 58, 0.35);
+  /* Lock state — amber, framed as "held / preserved" (see phase 12). Red
+     is reserved for destructive actions and the villain role. */
+  --accent-lock: #FFB020;
+  --accent-lock-glow: rgba(255, 176, 32, 0.35);
 
   /* Spacing */
   --space-2xs: 2px;
@@ -63,7 +73,8 @@
   --bg-overlay: #F0F2F5;
   --text-primary: #1F2937;
   --text-secondary: #6B7280;
-  --text-tertiary: #9CA3AF;
+  /* Bumped from #9CA3AF (~2.7:1) to #6B7280 hue-shifted for AA. */
+  --text-tertiary: #737B86;
   --text-inverse: #FFFFFF;
   --accent-cyan: #0891B2;
   --accent-cyan-muted: #06B6D4;
@@ -73,9 +84,14 @@
   --border-default: #D1D5DB;
   --border-subtle: #E5E7EB;
   --border-accent: #0891B2;
-  /* Apple HIG systemRed (light) */
-  --accent-lock: #FF3B30;
-  --accent-lock-glow: rgba(255, 59, 48, 0.25);
+  /* Role colors (light) */
+  --accent-hero: #16A34A;
+  --accent-hero-muted: #15803D;
+  --accent-villain: #DC2626;
+  --accent-villain-muted: #B91C1C;
+  /* Lock state — amber in light mode, same semantics as dark */
+  --accent-lock: #D97706;
+  --accent-lock-glow: rgba(217, 119, 6, 0.25);
 }
 
 /* --- Reset & Base --- */
@@ -113,6 +129,11 @@ body::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  body::before { display: none; }
+}
+
+/* Users who request higher contrast don't want CRT fuzz. */
+@media (prefers-contrast: more) {
   body::before { display: none; }
 }
 
@@ -182,6 +203,11 @@ body::before {
 
 .icon-filled {
   font-variation-settings: 'FILL' 1, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Brief confirmation tint when a copy succeeds (phase 13). */
+.icon-copied {
+  color: var(--accent-green);
 }
 
 /* --- Focus Indicators --- */
@@ -289,8 +315,8 @@ body::before {
   justify-content: center;
   min-height: 100vh;
   text-align: center;
-  gap: var(--space-3xl);
-  padding: var(--space-4xl) var(--space-lg);
+  gap: var(--space-2xl);
+  padding: var(--space-3xl) var(--space-lg);
 }
 
 .intro-subtitle {
@@ -298,8 +324,11 @@ body::before {
 }
 
 .intro-screen .text-display {
-  color: var(--accent-cyan);
-  text-shadow: 0 0 30px rgba(0, 229, 255, 0.3);
+  /* The intro title is the brand moment — keep a subtle cyan glow since
+     cyan still brands the app, but the title text itself is neutral so
+     the Roll CTA (the only other cyan surface) stays distinct. */
+  color: var(--text-primary);
+  text-shadow: 0 0 30px rgba(0, 229, 255, 0.25);
 }
 
 .intro-subtitle {
@@ -313,6 +342,52 @@ body::before {
   gap: var(--space-xs);
   width: 100%;
   max-width: 280px;
+}
+
+.intro-load-disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  background: none;
+  border: none;
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--text-tertiary);
+  font: 400 0.8125rem/1.3 var(--font-body);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color 0.2s ease;
+}
+
+.intro-load-disclosure:hover,
+.intro-load-disclosure:focus-visible {
+  color: var(--text-secondary);
+}
+
+.intro-load-disclosure .material-symbols-outlined {
+  font-size: 16px;
+  transition: transform 200ms ease;
+}
+
+.intro-load-disclosure[aria-expanded="true"] .material-symbols-outlined {
+  transform: rotate(90deg);
+}
+
+.intro-load-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-top: var(--space-xs);
+}
+
+.intro-load-body[hidden] {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-load-disclosure .material-symbols-outlined {
+    transition: none;
+  }
 }
 
 .intro-load input {
@@ -392,6 +467,15 @@ body::before {
   /* HIG Footnote: 13pt */
   font-size: 0.8125rem;
   margin-top: var(--space-sm);
+}
+
+/* Show the right verb per input modality */
+.die-hint-pointer { display: none; }
+.die-hint-touch { display: inline; }
+
+@media (hover: hover) and (pointer: fine) {
+  .die-hint-pointer { display: inline; }
+  .die-hint-touch { display: none; }
 }
 
 @keyframes die-float {
@@ -526,14 +610,14 @@ body::before {
   margin: 0;
   cursor: pointer;
   font: 700 1rem/1 var(--font-display);
-  color: var(--accent-cyan);
+  color: var(--text-primary);
   letter-spacing: 2px;
   border-radius: var(--radius-sm);
-  transition: opacity 0.2s ease, text-shadow 0.2s ease;
+  transition: opacity 0.2s ease, color 0.2s ease;
 }
 
 .top-bar-title:hover {
-  text-shadow: 0 0 12px rgba(0, 229, 255, 0.45);
+  color: var(--text-secondary);
 }
 
 .top-bar-title:active {
@@ -582,7 +666,14 @@ body::before {
   padding: var(--space-xs);
 }
 
-/* Left-handed mode */
+/* Left-handed mode.
+   CSS row-reverse mirrors the visual layout without duplicating the DOM.
+   Accessibility trade-off (WCAG 1.3.2 Meaningful Sequence): keyboard tab
+   order follows the DOM, so it reverses visually in this mode. We accept
+   this because the preference itself is about thumb reach — tab-proximate
+   items landing under the thumb-proximate side is arguably *desirable* for
+   the specific users who enable this mode (they explicitly want those
+   buttons first). Documented here so a future reviewer doesn't "fix" it. */
 [data-left-handed="true"] .top-bar {
   flex-direction: row-reverse;
 }
@@ -603,9 +694,9 @@ body::before {
   flex-direction: row-reverse;
 }
 
-/* Keep chevrons/labels on the left; only the interactive lock button moves
+/* Keep chevrons/labels on the left; the interactive action group moves
    to the left so users can reach it with their thumb. */
-[data-left-handed="true"] .trait-line .trait-lock {
+[data-left-handed="true"] .trait-line .trait-actions {
   order: -1;
 }
 
@@ -619,55 +710,170 @@ body::before {
   flex-wrap: wrap;
 }
 
+.controls-bar .mood-combobox-wrapper {
+  flex: 0 0 auto;
+  max-width: 280px;
+}
+
+@media (max-width: 480px) {
+  /* Let the combobox take the full row on tight mobile, so "Corporate
+     dystopia" doesn't get clipped by the view toggle eating space. */
+  .controls-bar .mood-combobox-wrapper {
+    flex: 1 1 100%;
+    max-width: none;
+    order: -1;
+  }
+}
+
 .view-toggle {
   display: flex;
-  background: var(--bg-elevated);
+  background: transparent;
   border-radius: var(--radius-md);
   overflow: hidden;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-subtle);
 }
 
 .view-toggle button {
-  padding: var(--space-sm) var(--space-lg);
+  /* Smaller + lower-contrast — view toggle is demoted relative to mood (phase 11).
+     36px min-height meets spec touch target. */
+  padding: var(--space-xs) var(--space-md);
   background: none;
   border: none;
-  color: var(--text-secondary);
-  /* HIG Subhead: 15pt */
-  font: 700 0.9375rem/1.33 var(--font-body);
+  color: var(--text-tertiary);
+  font: 700 0.75rem/1.33 var(--font-body);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   cursor: pointer;
-  min-height: 44px;
+  min-height: 36px;
   transition: background 0.2s ease, color 0.2s ease;
 }
 
 .view-toggle button.active {
-  background: var(--accent-cyan);
-  color: var(--text-inverse);
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
 }
 
-.mood-select {
+/* --- Mood combobox (custom, phase 11) --- */
+.mood-combobox-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  flex: 1;
+  min-width: 0;
+  max-width: 280px;
 }
 
-.mood-select select {
-  /* Strip native chrome so we can size padding consistently */
-  appearance: none;
-  -webkit-appearance: none;
-  padding: var(--space-sm) var(--space-lg);
-  /* Extra right padding = space for our custom chevron + matching gutter */
-  padding-right: calc(var(--space-lg) + 20px);
-  background-color: var(--bg-elevated);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'><path d='M2 4l4 4 4-4' stroke='%238B949E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right var(--space-lg) center;
+.mood-combobox-icon {
+  color: var(--text-secondary);
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.mood-combobox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  /* HIG Subhead: 15pt */
-  font: 400 0.9375rem/1.33 var(--font-body);
+  font: 700 0.9375rem/1.33 var(--font-body);
   min-height: 44px;
   cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  white-space: nowrap;
+}
+
+.mood-combobox > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  text-align: left;
+}
+
+.mood-combobox:hover,
+.mood-combobox:focus-visible,
+.mood-combobox[aria-expanded="true"] {
+  border-color: var(--text-secondary);
+}
+
+.mood-combobox-chevron {
+  font-size: 18px;
+  color: var(--text-secondary);
+  transition: transform 200ms ease;
+}
+
+.mood-combobox[aria-expanded="true"] .mood-combobox-chevron {
+  transform: rotate(180deg);
+}
+
+.mood-listbox {
+  position: absolute;
+  top: calc(100% + var(--space-xs));
+  left: 28px; /* align under the combobox, past the tune icon */
+  right: 0;
+  list-style: none;
+  margin: 0;
+  padding: var(--space-xs);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.mood-listbox[hidden] {
+  display: none !important;
+}
+
+.mood-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  min-height: 40px;
+  color: var(--text-primary);
+  font: 400 0.9375rem/1.33 var(--font-body);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
+}
+
+.mood-option:hover,
+.mood-option:focus-visible {
+  background: var(--bg-overlay);
+  outline: none;
+}
+
+.mood-option:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: -2px;
+}
+
+.mood-option-check {
+  font-size: 18px;
+  color: var(--accent-cyan);
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.mood-option[aria-selected="true"] .mood-option-check {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mood-combobox-chevron {
+    transition: none;
+  }
 }
 
 /* --- Results Container --- */
@@ -681,6 +887,94 @@ body::before {
 
 .intro-screen.hidden {
   display: none;
+}
+
+/* --- Logline --- */
+.logline-container {
+  padding-top: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.logline-container[hidden] {
+  display: none !important;
+}
+
+.logline-box {
+  width: 100%;
+  padding: var(--space-lg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-left: 2px solid rgba(0, 229, 255, 0.35);
+  border-radius: var(--radius-md);
+}
+
+.logline-text {
+  color: var(--text-primary);
+  font: 400 0.9rem/1.35 var(--font-body);
+  margin: 0;
+}
+
+.logline-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: none;
+  border: 1px solid var(--border-subtle);
+  padding: var(--space-xs) var(--space-md);
+  min-height: 36px;
+  color: var(--text-secondary);
+  font: 400 0.875rem/1.3 var(--font-body);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.logline-copy-btn:hover,
+.logline-copy-btn:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.logline-copy-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+/* Logline re-render uses the same fizzle tone as traits but tuned for
+   a paragraph rather than single rows. */
+.logline-fizzle {
+  animation: logline-fizzle 460ms steps(10, end) both;
+}
+
+@keyframes logline-fizzle {
+  0% {
+    opacity: 0;
+    filter: blur(2px) brightness(1.6);
+    transform: translateX(-2px);
+  }
+  20% {
+    opacity: 1;
+    filter: blur(1px) brightness(1.3);
+    transform: translateX(2px);
+  }
+  60% {
+    opacity: 0.7;
+    filter: brightness(1.1);
+    transform: translateX(-1px);
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logline-fizzle {
+    animation: none;
+  }
 }
 
 .cards-grid {
@@ -714,11 +1008,83 @@ body::before {
   border-radius: var(--radius-lg);
   overflow: hidden;
   transition: border-color 0.3s ease;
+  position: relative;
+}
+
+/* Role-coded top accent stripe: reinforces hero/villain at card level
+   without adding weight to the non-role cards (squad / setting / obstacles). */
+.card[data-section="hero"]::before,
+.card[data-section="villain"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  pointer-events: none;
+}
+
+.card[data-section="hero"]::before {
+  background: var(--accent-hero);
+}
+
+.card[data-section="villain"]::before {
+  background: var(--accent-villain);
+}
+
+.card {
+  /* Smooth lock transitions (phase 7) — 150ms instead of instant. */
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .card.locked {
   border-color: var(--accent-lock);
   box-shadow: 0 0 0 1px var(--accent-lock), 0 0 16px var(--accent-lock-glow);
+}
+
+/* Card pulse on section re-roll — brief cyan border flash with a tiny scale. */
+@keyframes card-pulse {
+  0% {
+    box-shadow: 0 0 0 1px var(--accent-cyan);
+    transform: scale(1.005);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    transform: scale(1);
+  }
+}
+
+.card.card-pulse {
+  animation: card-pulse 400ms ease-out;
+}
+
+/* Role cards use their role color for the pulse so it doesn't mix oddly
+   with the top stripe (green+cyan or red+cyan smear). */
+.card[data-section="hero"].card-pulse {
+  animation-name: card-pulse-hero;
+}
+.card[data-section="villain"].card-pulse {
+  animation-name: card-pulse-villain;
+}
+
+@keyframes card-pulse-hero {
+  0% { box-shadow: 0 0 0 1px var(--accent-hero); transform: scale(1.005); }
+  100% { box-shadow: 0 0 0 0 transparent; transform: scale(1); }
+}
+
+@keyframes card-pulse-villain {
+  0% { box-shadow: 0 0 0 1px var(--accent-villain); transform: scale(1.005); }
+  100% { box-shadow: 0 0 0 0 transparent; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes card-pulse-reduced {
+    0%   { box-shadow: 0 0 0 1px var(--accent-cyan); }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+  .card.card-pulse {
+    animation: card-pulse-reduced 400ms ease-out;
+  }
 }
 
 .card.locked .lock-icon {
@@ -730,29 +1096,65 @@ body::before {
   align-items: center;
   justify-content: space-between;
   padding: var(--space-lg);
-  cursor: pointer;
   min-height: 56px;
   gap: var(--space-sm);
 }
 
 .card-header-title {
-  /* Reset button defaults — still reads as a heading visually */
-  appearance: none;
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  text-align: left;
-  cursor: pointer;
   /* HIG Headline: 17pt */
   font: 700 1.0625rem/1.29 var(--font-body);
   text-transform: uppercase;
   letter-spacing: 2px;
-  color: var(--accent-cyan);
+  /* Neutral default — role colors (hero/villain) override below.
+     Squad, Setting, Obstacles are ensemble/context, stay neutral. */
+  color: var(--text-primary);
   flex: 1;
   min-height: 44px;
   display: inline-flex;
   align-items: center;
+  gap: var(--space-xs);
+}
+
+/* Role-coded headings: protagonist green, antagonist red. */
+.card[data-section="hero"] .card-header-title {
+  color: var(--accent-hero);
+}
+
+.card[data-section="villain"] .card-header-title {
+  color: var(--accent-villain);
+}
+
+/* The >> is decoration — muted, not a control. */
+.card-header-prefix {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  font-size: 0.875rem;
+  letter-spacing: 1px;
+}
+
+/* Disclosure chevron — mobile only, rotates when expanded. */
+.card-chevron {
+  display: none;
+}
+
+.card-chevron .material-symbols-outlined {
+  transition: transform 200ms ease;
+}
+
+.card.expanded .card-chevron .material-symbols-outlined {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 767px) {
+  .card-chevron {
+    display: inline-flex;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-chevron .material-symbols-outlined {
+    transition: none;
+  }
 }
 
 .card-header-actions {
@@ -762,8 +1164,9 @@ body::before {
 }
 
 .card-header-actions .btn-icon {
-  min-width: 32px;
-  min-height: 32px;
+  /* Match the spec's documented 36×36 hit area */
+  min-width: 36px;
+  min-height: 36px;
   padding: var(--space-xs);
 }
 
@@ -807,7 +1210,8 @@ body::before {
   padding: var(--space-xs) 0;
   border-left: 2px solid transparent;
   padding-left: var(--space-sm);
-  transition: border-color 0.2s ease;
+  /* Smooth lock border fade (phase 7) */
+  transition: border-color 150ms ease;
   min-height: 28px;
 }
 
@@ -830,7 +1234,7 @@ body::before {
 }
 
 .trait-prefix {
-  color: var(--accent-cyan-muted);
+  color: var(--text-secondary);
   font-weight: 700;
   flex-shrink: 0;
   min-width: 16px;
@@ -842,7 +1246,10 @@ body::before {
 }
 
 .trait-label {
-  color: var(--accent-amber);
+  /* Field-type labels (WEAK, TRAUMA, WHEN, WHERE). Amber was dropped
+     when lock moved to amber — the uppercase monospace + letter-spacing
+     already signals "label, not content". Color goes structural. */
+  color: var(--text-secondary);
   font-weight: 700;
   flex-shrink: 0;
   text-transform: uppercase;
@@ -851,36 +1258,60 @@ body::before {
   letter-spacing: 0.5px;
 }
 
-.trait-lock {
-  opacity: 0;
-  transition: opacity 0.2s ease;
+/* Group for swap + lock buttons at the end of each trait row.
+   Swap sits on the left, lock on the right; in left-handed mode the whole
+   group flips to the start of the row via order: -1 below. */
+.trait-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
   flex-shrink: 0;
-  min-width: 24px;
-  min-height: 24px;
-  width: 24px;
-  height: 24px;
-  padding: 0;
+}
+
+.trait-lock,
+.trait-swap {
+  opacity: 0.2;
+  transition: opacity 0.2s ease, color 0.2s ease;
+  flex-shrink: 0;
+  /* 28×28 visible target, 36×36 hit area via padding */
+  min-width: 36px;
+  min-height: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 4px;
   border-radius: var(--radius-sm);
 }
 
-.trait-lock .material-symbols-outlined {
-  font-size: 14px;
+.trait-lock .material-symbols-outlined,
+.trait-swap .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .trait-line:hover .trait-lock,
-.trait-line .trait-lock.visible {
+.trait-line:hover .trait-swap,
+.trait-lock:focus-visible,
+.trait-swap:focus-visible {
+  opacity: 0.7;
+}
+
+/* Locked trait: lock is full opacity red, swap dims out further */
+.trait-line.trait-locked .trait-lock {
   opacity: 1;
 }
 
-/* Touch devices have no hover — show lock at low opacity so users can discover it */
-@media (hover: none) {
-  .trait-lock {
-    opacity: 0.35;
-  }
+.trait-line.trait-locked .trait-swap,
+.trait-swap:disabled {
+  opacity: 0.12;
+  cursor: not-allowed;
 }
 
-.lock-icon {
-  transition: transform 0.2s ease, color 0.2s ease;
+.trait-line.trait-locked:hover .trait-swap {
+  opacity: 0.18;
+}
+
+.lock-icon,
+.lock-icon .material-symbols-outlined {
+  transition: transform 0.2s ease, color 150ms ease, font-variation-settings 150ms ease;
 }
 
 .lock-icon:active {
@@ -938,6 +1369,12 @@ body::before {
   max-width: 500px;
   width: 100%;
   position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-wide {
+  max-width: 760px;
 }
 
 .modal-header {
@@ -950,6 +1387,10 @@ body::before {
 .modal-title {
   font: 700 1.25rem/1.3 var(--font-display);
   color: var(--text-primary);
+}
+
+.modal textarea#share-code {
+  margin-bottom: 0;
 }
 
 .modal textarea {
@@ -968,6 +1409,309 @@ body::before {
 .modal-actions {
   display: flex;
   gap: var(--space-sm);
+}
+
+/* --- Share modal (export hub — phase 4) --- */
+.share-description {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-lg);
+}
+
+.share-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.share-action-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.share-code-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: none;
+  border: none;
+  padding: var(--space-sm) 0;
+  color: var(--text-secondary);
+  font: 400 0.875rem/1.3 var(--font-body);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.share-code-disclosure:hover,
+.share-code-disclosure:focus-visible {
+  color: var(--text-primary);
+}
+
+.share-code-chevron {
+  font-size: 18px;
+  transition: transform 200ms ease;
+}
+
+.share-code-disclosure[aria-expanded="true"] .share-code-chevron {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-code-chevron {
+    transition: none;
+  }
+}
+
+.share-code-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+}
+
+/* [hidden] would otherwise lose to our display:flex rules in several
+   places. Explicit override restores the semantics. */
+.share-actions [hidden],
+.share-code-block[hidden],
+.modal-actions[hidden] {
+  display: none !important;
+}
+
+/* --- Undo button label --- */
+.btn-undo {
+  gap: var(--space-xs);
+}
+
+.btn-undo-label {
+  font: 700 0.8125rem/1 var(--font-body);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 250ms ease, opacity 250ms ease;
+}
+
+.btn-undo.btn-undo-label-visible .btn-undo-label,
+.btn-undo:hover:not(:disabled) .btn-undo-label,
+.btn-undo:focus-visible:not(:disabled) .btn-undo-label {
+  max-width: 80px;
+  opacity: 1;
+}
+
+/* On very tight mobile viewports, collapse the inline label entirely —
+   the 1.5s flash still runs, just without room to expand the text. */
+@media (max-width: 480px) {
+  .btn-undo.btn-undo-label-visible .btn-undo-label {
+    max-width: 64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-undo-label {
+    transition: none;
+  }
+}
+
+/* --- Keyboard Shortcuts Panel --- */
+.shortcuts-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-xs) var(--space-md);
+  margin: var(--space-md) 0 var(--space-lg);
+}
+
+@media (min-width: 520px) {
+  .shortcuts-list {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+}
+
+.shortcut-row dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.shortcut-row dd {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  padding: 2px 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font: 700 0.75rem/1 var(--font-body);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* --- Pinned Builds Panel --- */
+.pinned-slots {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+@media (min-width: 600px) {
+  .pinned-slots {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.pin-slot {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  text-align: left;
+  font: inherit;
+  color: var(--text-primary);
+  position: relative;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.pin-slot-empty {
+  border-style: dashed;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.pin-slot-empty .material-symbols-outlined {
+  font-size: 28px;
+  color: var(--text-tertiary);
+}
+
+.pin-slot-empty:hover:not(.disabled),
+.pin-slot-empty:focus-visible {
+  border-color: var(--accent-cyan);
+}
+
+.pin-slot-empty:hover:not(.disabled) .material-symbols-outlined,
+.pin-slot-empty:focus-visible .material-symbols-outlined {
+  color: var(--accent-cyan);
+}
+
+.pin-slot-empty.disabled,
+.pin-slot-empty:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pin-slot-filled {
+  cursor: default;
+}
+
+.pin-slot-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  flex: 1;
+  min-width: 0;
+}
+
+.pin-slot-label-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.pin-slot-label {
+  color: var(--text-primary);
+  font: 400 0.875rem/1.35 var(--font-body);
+  word-break: break-word;
+}
+
+.pin-slot-label-input {
+  width: 100%;
+  padding: var(--space-2xs) var(--space-xs);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font: 400 0.875rem/1.35 var(--font-body);
+}
+
+.pin-slot-time {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+}
+
+.pin-slot-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.pin-slot-load {
+  flex: 1;
+  min-height: 36px;
+  padding: var(--space-xs) var(--space-md);
+  font-size: 0.8125rem;
+  gap: var(--space-xs);
+}
+
+.pin-slot-load .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.pin-slot-actions .btn-icon {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+.pin-slot-actions .btn-icon .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.pin-slot-replace {
+  cursor: pointer;
+  border-color: var(--border-default);
+}
+
+.pin-slot-replace-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 77, 77, 0.12);
+  color: var(--accent-villain);
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  border-radius: var(--radius-md);
+  pointer-events: none;
+}
+
+.pin-slot-replace:hover .pin-slot-replace-overlay,
+.pin-slot-replace:focus-visible .pin-slot-replace-overlay {
+  opacity: 1;
 }
 
 /* --- Toast --- */
@@ -1035,6 +1779,26 @@ body::before {
 .trait-fizzle {
   animation: trait-fizzle 460ms steps(10, end) both;
   will-change: opacity, filter, transform;
+}
+
+/* Cyan glow on the row that just changed — rises fast, fades long. */
+.trait-fizzle .trait-text {
+  animation-name: trait-fizzle-scan, trait-glow;
+  animation-duration: 460ms, 550ms;
+  animation-timing-function: steps(10, end), ease-out;
+  animation-fill-mode: both, both;
+}
+
+@keyframes trait-glow {
+  0%   { text-shadow: none; }
+  28%  { text-shadow: 0 0 8px rgba(0, 229, 255, 0.6); }
+  100% { text-shadow: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trait-fizzle .trait-text {
+    animation: none;
+  }
 }
 
 /* The short burst of "scanlines" feels more CRT-y on a dark bg */
@@ -1115,13 +1879,129 @@ body::before {
   display: none;
 }
 
-/* Flip the "back of hand" icon to preview the destination mode.
-   In right-handed mode, the button switches to left-handed — so show a left hand. */
-[data-left-handed="false"] #btn-left-hand .material-symbols-outlined {
-  transform: scaleX(-1);
+/* --- More overflow menu --- */
+.more-menu-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.more-menu {
+  position: absolute;
+  top: calc(100% + var(--space-xs));
+  right: 0;
+  min-width: 240px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.more-menu[hidden] {
+  display: none;
+}
+
+/* Near the right viewport edge on mobile, flip to the left */
+@media (max-width: 480px) {
+  .more-menu {
+    right: auto;
+    left: 0;
+  }
+}
+
+/* In left-handed mode the More button ends up on the left of the top bar,
+   so anchor the popover to the left edge instead. */
+[data-left-handed="true"] .more-menu {
+  right: auto;
+  left: 0;
+}
+
+.more-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  min-height: 40px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  /* HIG Subhead: 15pt */
+  font: 400 0.9375rem/1.33 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease, color 0.15s ease;
+  width: 100%;
+}
+
+.more-menu-item:hover,
+.more-menu-item:focus-visible {
+  background: var(--bg-overlay);
+  outline: none;
+}
+
+.more-menu-item:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: -2px;
+}
+
+.more-menu-item .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--text-secondary);
+}
+
+.more-menu-label {
+  flex: 1;
+}
+
+.more-menu-check {
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.more-menu-item[aria-checked="true"] .more-menu-check {
+  opacity: 1;
+  color: var(--accent-cyan);
+}
+
+.more-menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--space-xs) 0;
+}
+
+.more-menu-destructive,
+.more-menu-destructive .material-symbols-outlined {
+  color: var(--accent-red);
+}
+
+.more-menu-destructive:hover,
+.more-menu-destructive:focus-visible {
+  background: rgba(255, 77, 77, 0.08);
+}
+
+/* The left-handed item only makes sense where the layout actually flips
+   (mobile + tablet). On ≥ 1024px the layout is already wide enough. */
+@media (min-width: 1024px) {
+  .more-menu-lefthand {
+    display: none;
+  }
 }
 
 /* --- Responsive --- */
+@media (max-width: 359px) {
+  /* Tiny viewports — pull trait text down one step and tighten slightly. */
+  .trait-text {
+    font-size: 1rem;
+    letter-spacing: -0.1px;
+  }
+}
+
 @media (max-width: 600px) {
   .top-bar-left {
     display: none;
@@ -1154,10 +2034,24 @@ body::before {
 
   .card-header {
     padding: var(--space-md);
+    flex-wrap: wrap;
+    row-gap: var(--space-xs);
   }
 
   .card-body {
     padding: 0 var(--space-md) var(--space-md);
+  }
+}
+
+@media (max-width: 359px) {
+  .card-header-title {
+    letter-spacing: 1px;
+    font-size: 0.9375rem;
+  }
+
+  .card-header-actions .btn-icon {
+    min-width: 32px;
+    min-height: 32px;
   }
 }
 
@@ -1179,11 +2073,6 @@ body::before {
   .card .card-summary {
     display: none !important;
   }
-
-  .card-header,
-  .card-header-title {
-    cursor: default;
-  }
 }
 
 @media (min-width: 1024px) {
@@ -1192,7 +2081,6 @@ body::before {
   }
 
   /* Desktop: hide controls that only make sense on mobile/cramped screens */
-  #btn-left-hand,
   .view-toggle {
     display: none !important;
   }
@@ -1224,9 +2112,58 @@ body::before {
   text-align: center;
 }
 
+.confirm-title {
+  font: 700 1.25rem/1.3 var(--font-display);
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+}
+
 .confirm-dialog p {
   margin-bottom: var(--space-xl);
-  color: var(--text-primary);
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+
+/* Destructive primary (e.g. "Clear it" in the reset confirm dialog) */
+.btn-destructive {
+  background: var(--accent-red);
+  color: white;
+}
+
+.btn-destructive:hover {
+  background: var(--accent-red-muted);
+}
+
+/* --- Intro resume row (phase 8) --- */
+.intro-resume {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  max-width: 340px;
+  width: 100%;
+}
+
+.intro-resume[hidden] {
+  display: none !important;
+}
+
+.intro-resume-label {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.intro-resume-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.intro-resume-actions .btn-primary,
+.intro-resume-actions .btn-secondary {
+  min-height: 36px;
+  padding: var(--space-xs) var(--space-md);
+  font-size: 0.8125rem;
 }
 
 .confirm-actions {
