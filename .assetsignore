@@ -1,0 +1,11 @@
+# Internal docs — not for public consumption
+BUILD-SPEC.md
+spec.md
+
+# Config — should not be served
+wrangler.toml
+.assetsignore
+.gitignore
+
+# Source control
+.git/

@@ -1318,33 +1318,6 @@ body::before {
   transform: scale(0.85);
 }
 
-/* --- Footer --- */
-.footer {
-  text-align: center;
-  padding: var(--space-xl) 0;
-  color: var(--text-tertiary);
-  /* HIG Footnote: 13pt */
-  font-size: 0.8125rem;
-}
-
-.footer [aria-label="love"] {
-  color: var(--accent-red);
-  font-size: 1em;
-  margin: 0 0.15em;
-}
-
-.footer-link {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  transition: color 0.2s ease;
-}
-
-.footer-link:hover,
-.footer-link:focus-visible {
-  color: var(--accent-cyan);
-}
-
 /* --- Modal --- */
 .modal-overlay {
   position: fixed;
@@ -2170,4 +2143,20 @@ kbd {
   display: flex;
   gap: var(--space-sm);
   justify-content: center;
+}
+
+.forhuman-credit {
+  position: fixed;
+  z-index: 1;
+  bottom: 0.75rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.75rem;
+  opacity: 0.5;
+  margin: 0;
+  padding: 0 1rem;
+}
+.forhuman-credit a {
+  color: inherit;
 }

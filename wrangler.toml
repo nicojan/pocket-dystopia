@@ -1,0 +1,13 @@
+# Cloudflare Workers — static assets deploy for pocketdystopia.forhuman.ca.
+#
+# No Worker script. The "assets" directive tells Cloudflare to serve the
+# repo's static files (index.html, app.js, styles.css, images) directly
+# from the edge.
+
+name = "pocket-dystopia"
+compatibility_date = "2026-04-17"
+
+[assets]
+directory = "./"
+not_found_handling = "none"
+html_handling = "auto-trailing-slash"
