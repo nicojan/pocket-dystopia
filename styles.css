@@ -2367,3 +2367,307 @@ kbd {
 .forhuman-credit a {
   color: inherit;
 }
+
+/* --- Present view (classroom screen) ---
+   Large type sized from the viewport; fitPresent() lowers --present-scale
+   until everything fits without scrolling. */
+.present-view {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: none;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.present-view.active {
+  display: block;
+}
+
+.present-inner {
+  --present-scale: 1;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: calc(1.1em * var(--present-scale));
+  padding: max(3vh, 20px) max(4vw, 24px) calc(max(3vh, 20px) + 64px);
+  font-family: var(--font-body);
+  font-size: calc(var(--present-scale) * clamp(15px, 1.25vw + 0.9vh, 40px));
+  line-height: 1.35;
+}
+
+.present-brand {
+  font: 700 0.8em/1 var(--font-display);
+  letter-spacing: 0.2em;
+  color: var(--text-tertiary);
+}
+
+.present-logline {
+  font-size: 1.45em;
+  line-height: 1.3;
+  max-width: 62ch;
+  padding-left: 0.6em;
+  border-left: 0.18em solid var(--accent-cyan);
+}
+
+.present-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.9em 1.4em;
+}
+
+.present-card-setting {
+  grid-column: 1 / -1;
+}
+
+.present-card-setting .present-rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3em 1.4em;
+}
+
+.present-card-title {
+  font: 700 0.85em/1.2 var(--font-body);
+  letter-spacing: 0.12em;
+  margin-bottom: 0.35em;
+}
+
+.present-card-title span {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.present-card-hero .present-card-title { color: var(--accent-hero); }
+.present-card-villain .present-card-title { color: var(--accent-villain); }
+
+.present-rows {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.present-row {
+  display: flex;
+  gap: 0.45em;
+}
+
+.present-prefix,
+.present-label {
+  color: var(--text-tertiary);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.present-label {
+  font-size: 0.7em;
+  line-height: 1.9;
+  letter-spacing: 0.05em;
+}
+
+.present-held {
+  box-shadow: inset 0.14em 0 0 var(--accent-lock);
+  padding-left: 0.45em;
+}
+
+.present-lock {
+  font-size: 0.9em;
+  color: var(--accent-lock);
+  vertical-align: -0.1em;
+}
+
+.present-fizzle {
+  animation: logline-fizzle 460ms steps(10, end) both;
+}
+
+.present-controls {
+  position: absolute;
+  right: max(2vw, 16px);
+  bottom: max(2vh, 16px);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+}
+
+.present-controls:hover,
+.present-controls:focus-within {
+  opacity: 1;
+}
+
+.present-undo:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (hover: none) {
+  .present-controls {
+    opacity: 1;
+  }
+}
+
+/* Narrow screens (a phone presenting): stack and allow scrolling. */
+@media (max-width: 760px) {
+  .present-inner {
+    overflow-y: auto;
+  }
+
+  .present-grid,
+  .present-card-setting .present-rows {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1100px) {
+  .present-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* --- Printable worksheet ---
+   Hidden on screen. When a build exists (html.has-print-sheet), printing
+   shows only the worksheet, black on white. */
+.print-sheet {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  html.has-print-sheet body > *:not(#print-sheet) {
+    display: none !important;
+  }
+
+  html.has-print-sheet .print-sheet {
+    display: block;
+  }
+
+  html.has-print-sheet,
+  html.has-print-sheet body {
+    background: #fff !important;
+    min-height: 0;
+  }
+
+  body::before {
+    display: none !important;
+  }
+
+  .print-sheet {
+    color: #000;
+    font: 400 10.5pt/1.45 var(--font-body);
+  }
+
+  .ws-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12pt;
+    border-bottom: 1.5pt solid #000;
+    padding-bottom: 6pt;
+    margin-bottom: 10pt;
+  }
+
+  .ws-header {
+    flex-wrap: wrap;
+  }
+
+  .ws-header h1 {
+    font: 700 15pt/1.2 var(--font-display);
+    letter-spacing: 1pt;
+    white-space: nowrap;
+  }
+
+  .ws-name {
+    display: flex;
+    align-items: flex-end;
+    gap: 6pt;
+    font-size: 9.5pt;
+  }
+
+  .ws-blank {
+    display: inline-block;
+    width: 150pt;
+    border-bottom: 0.75pt solid #000;
+  }
+
+  .ws-blank-short {
+    width: 80pt;
+  }
+
+  .ws-logline {
+    font-size: 11pt;
+    padding: 6pt 0 6pt 8pt;
+    border-left: 2pt solid #000;
+    margin-bottom: 10pt;
+  }
+
+  .ws-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6pt 18pt;
+    margin-bottom: 12pt;
+  }
+
+  .ws-section {
+    break-inside: avoid;
+  }
+
+  .ws-section h3 {
+    font: 700 9pt/1.3 var(--font-body);
+    letter-spacing: 1pt;
+    margin-bottom: 2pt;
+  }
+
+  .ws-section ul {
+    list-style: none;
+    font-size: 9.5pt;
+  }
+
+  .ws-section li {
+    padding-left: 10pt;
+    text-indent: -10pt;
+  }
+
+  .ws-section li::before {
+    content: "› ";
+  }
+
+  .ws-section b {
+    font-size: 8pt;
+  }
+
+  .ws-turn {
+    font: 700 12pt/1.3 var(--font-display);
+    margin-bottom: 4pt;
+  }
+
+  .ws-prompts {
+    padding-left: 22pt;
+    list-style-position: outside;
+  }
+
+  .ws-prompts li::marker {
+    font-weight: 700;
+  }
+
+  .ws-prompts li {
+    break-inside: avoid;
+    margin-bottom: 8pt;
+  }
+
+  .ws-line {
+    height: 20pt;
+    border-bottom: 0.5pt solid #999;
+  }
+
+  .ws-footer {
+    margin-top: 10pt;
+    font-size: 8pt;
+    color: #444;
+    word-break: break-all;
+  }
+}

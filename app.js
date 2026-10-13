@@ -782,6 +782,7 @@ function renderCards() {
 
   lastRenderedSnapshot = current;
   updateUndoButton();
+  if (isPresenting()) renderPresent(changedKeys);
 }
 
 // The logline reads from these state paths. If any of them change between
@@ -1129,9 +1130,11 @@ let undoHintShown = false;
 
 function updateUndoButton() {
   const btn = document.getElementById('btn-undo');
-  const barBtn = document.getElementById('btn-undo-bar');
   const shouldDisable = history.length === 0;
-  if (barBtn) barBtn.disabled = shouldDisable;
+  ['btn-undo-bar', 'btn-undo-present'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = shouldDisable;
+  });
   if (!btn) return;
   const wasDisabled = btn.disabled;
   btn.disabled = shouldDisable;
@@ -1935,6 +1938,10 @@ function initKeyboard() {
         closeMoreMenu();
         return;
       }
+      if (isPresenting() && modalFocusStack[modalFocusStack.length - 1]?.modalEl.id === 'present-view') {
+        closePresent();
+        return;
+      }
       const top = modalFocusStack[modalFocusStack.length - 1];
       if (!top) return;
       const closers = {
@@ -2309,6 +2316,168 @@ function executePinDelete() {
 }
 
 // ============================================
+// Classroom: Present view + printable worksheet
+// ============================================
+
+let presentEnteredFullscreen = false;
+
+function isPresenting() {
+  return document.getElementById('present-view')?.classList.contains('active') || false;
+}
+
+// Snapshot key and lock state for each row, in sectionRows() order.
+function presentRowMeta(key, section) {
+  if (key === 'setting') {
+    return [['setting:when', section.when.locked], ['setting:where', section.where.locked]];
+  }
+  const meta = (section.traits || []).map((t, i) => [`${key}:traits:${i}`, t.locked]);
+  if (section.weakness) meta.push([`${key}:weakness`, section.weakness.locked]);
+  if (section.trauma) meta.push([`${key}:trauma`, section.trauma.locked]);
+  return meta;
+}
+
+function presentSectionHtml(key, title, section, changedKeys) {
+  const meta = presentRowMeta(key, section);
+  const rows = sectionRows(key, section).map(([prefix, text], i) => {
+    const [snapKey, locked] = meta[i];
+    const changed = changedKeys?.has(snapKey) ? ' present-fizzle' : '';
+    const held = locked || section.locked ? ' present-held' : '';
+    const label = prefix === '>'
+      ? '<span class="present-prefix" aria-hidden="true">&gt;</span>'
+      : `<span class="present-label">${escapeHtml(prefix)}</span>`;
+    return `<li class="present-row${changed}${held}">${label}<span>${escapeHtml(text)}</span></li>`;
+  }).join('');
+  const lock = section.locked
+    ? ' <span class="material-symbols-outlined icon-filled present-lock" aria-label="locked">lock</span>'
+    : '';
+  return `
+    <section class="present-card present-card-${key}${section.locked ? ' present-card-locked' : ''}">
+      <h2 class="present-card-title"><span aria-hidden="true">&gt;&gt;</span> ${title}${lock}</h2>
+      <ul class="present-rows">${rows}</ul>
+    </section>`;
+}
+
+function renderPresent(changedKeys) {
+  const inner = document.getElementById('present-inner');
+  if (!inner || !buildState) return;
+  const logChanged = changedKeys && LOGLINE_SOURCE_KEYS.some(k => changedKeys.has(k));
+  inner.innerHTML = `
+    <p class="present-brand">POCKET DYSTOPIA</p>
+    <p class="present-logline${logChanged ? ' present-fizzle' : ''}">${escapeHtml(buildLoglineText(buildState))}</p>
+    <div class="present-grid">
+      ${SECTIONS.map(({ key, title }) => presentSectionHtml(key, title, buildState.sections[key], changedKeys)).join('')}
+    </div>`;
+  fitPresent();
+}
+
+// Shrinks the type until the whole build fits the screen without scrolling.
+function fitPresent() {
+  const inner = document.getElementById('present-inner');
+  if (!inner || !isPresenting()) return;
+  let scale = 1;
+  inner.style.setProperty('--present-scale', String(scale));
+  // Narrow screens stack and scroll instead (see styles.css) — shrinking
+  // the type there would only make it unreadable.
+  if (window.matchMedia('(max-width: 760px)').matches) return;
+  while (scale > 0.45 && inner.scrollHeight > inner.clientHeight + 1) {
+    scale -= 0.05;
+    inner.style.setProperty('--present-scale', scale.toFixed(2));
+  }
+}
+
+function openPresent() {
+  if (!buildState) return;
+  const view = document.getElementById('present-view');
+  if (!view || isPresenting()) return;
+  closeMoreMenu();
+  // A hidden menu item can't take focus back on exit; use the More button.
+  const active = document.activeElement;
+  if (!active || active.offsetParent === null) document.getElementById('btn-more')?.focus();
+  openModal(view);
+  renderPresent(null);
+  // Start on Roll (Undo may be enabled and would otherwise come first).
+  setTimeout(() => view.querySelector('.present-controls .btn-primary')?.focus(), 0);
+  presentEnteredFullscreen = false;
+  const root = document.documentElement;
+  if (root.requestFullscreen && !document.fullscreenElement) {
+    root.requestFullscreen().then(() => {
+      // Closed again before fullscreen kicked in (F pressed twice quickly).
+      if (!isPresenting()) {
+        document.exitFullscreen?.().catch(() => {});
+        return;
+      }
+      presentEnteredFullscreen = true;
+      fitPresent();
+    }).catch(() => {});
+  }
+  document.fonts?.ready.then(fitPresent);
+}
+
+function closePresent() {
+  const view = document.getElementById('present-view');
+  if (!view || !isPresenting()) return;
+  closeModal(view);
+  if (presentEnteredFullscreen && document.fullscreenElement) {
+    document.exitFullscreen?.().catch(() => {});
+  }
+  presentEnteredFullscreen = false;
+}
+
+// --- Printable worksheet ---
+
+function buildPrintSheetHtml(state) {
+  const s = state.sections;
+  const lines = n => '<div class="ws-line"></div>'.repeat(n);
+  const prompts = [
+    `Set the scene. Describe ${s.setting.where.text} using three of your five senses.`,
+    `Introduce your hero ("${s.hero.traits[0].text}"). Show that trait through something they do. Don't just say it.`,
+    'Write the moment the hero first meets the villain. What does each of them notice?',
+    'The squad arrives. Who actually helps, and who makes everything worse?',
+    `Obstacle: ${s.obstacles.traits[0].text}. How do they get past it?`,
+    'The ending. Does the hero win, lose, or something stranger? Use the hero\'s weakness.',
+  ];
+  const sectionsHtml = SECTIONS.map(({ key, title }) => `
+    <div class="ws-section">
+      <h3>${title}</h3>
+      <ul>${sectionRows(key, s[key]).map(([p, t]) => `<li>${p === '>' ? '' : `<b>${escapeHtml(p)}</b> `}${escapeHtml(t)}</li>`).join('')}</ul>
+    </div>`).join('');
+  return `
+    <header class="ws-header">
+      <h1>Pocket Dystopia · Story seed</h1>
+      <div class="ws-name"><span>Name</span><span class="ws-blank"></span><span>Date</span><span class="ws-blank ws-blank-short"></span></div>
+    </header>
+    <p class="ws-logline">${escapeHtml(buildLoglineText(state))}</p>
+    <div class="ws-sections">${sectionsHtml}</div>
+    <h2 class="ws-turn">Your turn</h2>
+    <ol class="ws-prompts">
+      ${prompts.map(p => `<li><p>${escapeHtml(p)}</p>${lines(4)}</li>`).join('')}
+    </ol>
+    <footer class="ws-footer">Open this exact seed: ${escapeHtml(buildShareUrl(state))}</footer>`;
+}
+
+// Filled right before printing (menu item, or Cmd/Ctrl+P via beforeprint).
+// Without a build the page prints as-is.
+function preparePrintSheet() {
+  const sheet = document.getElementById('print-sheet');
+  if (!sheet) return;
+  const onResults = document.getElementById('results-screen')?.classList.contains('active');
+  if (buildState && onResults) {
+    sheet.innerHTML = buildPrintSheetHtml(buildState);
+    document.documentElement.classList.add('has-print-sheet');
+  } else {
+    sheet.innerHTML = '';
+    document.documentElement.classList.remove('has-print-sheet');
+  }
+}
+
+function printWorksheet() {
+  if (!buildState) return;
+  preparePrintSheet();
+  if (!document.documentElement.classList.contains('has-print-sheet')) return;
+  window.print();
+}
+
+// ============================================
 // More Menu
 // ============================================
 
@@ -2356,6 +2525,14 @@ function handleMenuAction(action) {
     case 'shake':
       // Stays open so the checkmark flip is visible (like left-handed).
       toggleShake();
+      return;
+    case 'present':
+      closeMoreMenu();
+      openPresent();
+      return;
+    case 'print':
+      closeMoreMenu();
+      printWorksheet();
       return;
     case 'shortcuts':
       closeMoreMenu();
@@ -2426,7 +2603,7 @@ function trapTab(e, modalEl) {
 }
 
 function initModalFocusTrap() {
-  const modals = ['share-modal', 'pinned-modal', 'shortcuts-modal', 'confirm-overlay'];
+  const modals = ['share-modal', 'pinned-modal', 'shortcuts-modal', 'confirm-overlay', 'present-view'];
   for (const id of modals) {
     const m = document.getElementById(id);
     if (!m) continue;
@@ -2475,9 +2652,35 @@ function initShortcuts() {
     const key = e.key;
 
     // `?` always works (even with modals open), and Escape is handled elsewhere.
-    if (key === '?') {
+    if (key === '?' && !isPresenting()) {
       e.preventDefault();
       openShortcutsPanel();
+      return;
+    }
+
+    // Present view: only the keys a teacher needs at the front of the room.
+    if (isPresenting()) {
+      const sectionKey = SECTION_KEYS[Number(key) - 1];
+      // Space belongs to a focused button (Undo / Exit), not the roll.
+      const onButton = target?.tagName === 'BUTTON';
+      // Presentation clickers send PageDown/PageUp (or arrows): next = roll,
+      // previous = undo.
+      if (key === 'r' || key === 'R' || (key === ' ' && !onButton) || key === 'PageDown' || key === 'ArrowRight') {
+        e.preventDefault();
+        rollDie();
+      } else if (key === 'PageUp' || key === 'ArrowLeft') {
+        e.preventDefault();
+        undo();
+      } else if (key === 'z' || key === 'Z') {
+        e.preventDefault();
+        undo();
+      } else if (key === 'f' || key === 'F') {
+        e.preventDefault();
+        closePresent();
+      } else if (sectionKey && /^[1-5]$/.test(key)) {
+        e.preventDefault();
+        rerollSection(sectionKey);
+      }
       return;
     }
 
@@ -2515,6 +2718,10 @@ function initShortcuts() {
       case 'l': case 'L':
         e.preventDefault();
         toggleTheme();
+        return;
+      case 'f': case 'F':
+        e.preventDefault();
+        openPresent();
         return;
       case '1': case '2': case '3': case '4': case '5': {
         e.preventDefault();
@@ -2608,6 +2815,15 @@ function init() {
   // Crossing the collapse breakpoint (rotating a tablet, resizing a window)
   // changes whether cards may be collapsed — re-render to match.
   window.matchMedia(COLLAPSE_MQ).addEventListener?.('change', () => renderCards());
+
+  window.addEventListener('beforeprint', preparePrintSheet);
+  window.addEventListener('resize', () => { if (isPresenting()) fitPresent(); });
+  // Leaving browser fullscreen (Esc is swallowed by the browser there) also
+  // leaves the present view.
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && presentEnteredFullscreen && isPresenting()) closePresent();
+    else if (isPresenting()) fitPresent();
+  });
 
   // Priority: URL hash share > saved state > fresh intro.
   // Hash-loads skip the CRT boot animation because it isn't a "roll".
