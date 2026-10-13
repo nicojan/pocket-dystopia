@@ -2,7 +2,7 @@
 
 > A satirical dystopian story-seed generator. Roll a die to randomize a hero, villain, squad, setting, and obstacles. Lock what you like, re-roll the rest, share the result via a link. Elementary-school-safe humor with a CRT/terminal aesthetic.
 >
-> This document describes the **current implemented build** (revision 2, the UX-audit pass; see [`UX-AUDIT-2026-10-13.md`](UX-AUDIT-2026-10-13.md) for the findings behind it). For the original pre-implementation design intent, see [`spec.md`](spec.md).
+> This document describes the **current implemented build** (revision 2: the UX-audit pass, plus the present view, printable worksheet, expanded trait pools and automated tests; see [`UX-AUDIT-2026-10-13.md`](UX-AUDIT-2026-10-13.md) for the audit findings). For the original pre-implementation design intent, see [`spec.md`](spec.md).
 
 ---
 
@@ -23,10 +23,10 @@
 
 ```
 Pocket Dystopia/
-├── index.html        # ~345 lines. Markup: intro + results screens, phone action bar, 4 modals, toast, sr-only announcer, credit footer
-├── styles.css        # ~2360 lines: tokens, components, animations, responsive, a11y
-├── data.js           # ~245 lines. Trait pools, tagged with mood categories. APPEND-ONLY (see §3.1)
-├── app.js            # ~2550 lines: state, rolling, rendering, validation, share codes, share image, pins, shortcuts, modal focus, a11y
+├── index.html        # ~380 lines. Markup: intro + results screens, phone action bar, 4 modals, present view, print worksheet, toast, sr-only announcer, credit footer
+├── styles.css        # ~2660 lines: tokens, components, animations, responsive, a11y, present view, print
+├── data.js           # ~320 lines. Trait pools (28–34 per pool), tagged with mood categories. APPEND-ONLY (see §3.1)
+├── app.js            # ~2810 lines: state, rolling, rendering, validation, share codes, share image, pins, present view, worksheet, shortcuts, modal focus, a11y
 ├── manifest.webmanifest  # Web app manifest (name, colours, 192/512 icons, standalone)
 ├── wrangler.toml     # Cloudflare Workers static-assets deploy config
 ├── spec.md           # Original pre-build design spec (historical)
@@ -34,7 +34,10 @@ Pocket Dystopia/
 ├── UX-AUDIT-2026-10-13.md  # The 27-finding UX audit and the fix chosen for each
 ├── favicon.ico, favicon-16.png, favicon-32.png
 ├── icon-192.png, icon-512.png, apple-touch-icon.png
-└── og-image-v2.png   # 1200×630 Open Graph image
+├── og-image-v3.png   # 1200×630 Open Graph image (rendered from tools/og-image.html)
+├── tools/            # og-image.html + render-og.mjs (not served)
+├── tests/            # Playwright e2e suite, own package.json (not served; see §14)
+└── .github/workflows/test.yml  # Runs the suite on push and PRs
 ```
 
 ---
@@ -69,19 +72,19 @@ Pocket Dystopia/
 
 All pools live under a single `DATA` object. Every item is `{ text: string, mood: string[] }`. The `mood` array tags the trait with one or more mood categories; an empty array marks a neutral item that fits any mood.
 
-**`data.js` is append-only.** v2 share codes store each trait as its index in its pool, so reordering, inserting or deleting an entry silently changes what every previously shared link shows. New entries go at the END of a pool; to retire one, edit its text in place. Each pool must stay under 256 entries (one byte per index). A comment at the top of `data.js` says the same.
+**`data.js` is append-only.** v2 share codes store each trait as its index in its pool, so reordering, inserting or deleting an entry silently changes what every previously shared link shows. New entries go at the END of a pool; to retire one, edit its text in place. Each pool must stay under 256 entries (one byte per index). A comment at the top of `data.js` says the same, and `tests/specs/data.spec.mjs` enforces it against `tests/fixtures/pool-snapshot.json` (regenerate that snapshot only after appending, never to paper over a reorder).
 
 ```js
 const DATA = {
-  heroTraits:       [{ text, mood }, ...],  // 26 items
-  heroWeaknesses:   [{ text, mood }, ...],  // 20 items
-  heroTraumas:      [{ text, mood }, ...],  // 20 items
-  villainTraits:    [{ text, mood }, ...],  // 26 items
-  villainWeaknesses:[{ text, mood }, ...],  // 20 items
-  squadMembers:     [{ text, mood }, ...],  // 26 items
-  settings:         [{ text, mood }, ...],  // 26 items
-  times:            [{ text, mood }, ...],  // 20 items
-  obstacles:        [{ text, mood }, ...],  // 25 items
+  heroTraits:       [{ text, mood }, ...],
+  heroWeaknesses:   [{ text, mood }, ...],
+  heroTraumas:      [{ text, mood }, ...],
+  villainTraits:    [{ text, mood }, ...],
+  villainWeaknesses:[{ text, mood }, ...],
+  squadMembers:     [{ text, mood }, ...],
+  settings:         [{ text, mood }, ...],
+  times:            [{ text, mood }, ...],
+  obstacles:        [{ text, mood }, ...],
 };
 ```
 
@@ -324,6 +327,14 @@ TRAUMA: <trauma>
 
 The "POCKET DYSTOPIA" title in the top bar (a button labelled "Pocket Dystopia, back to start", so the accessible name contains the visible text) is **non-destructive**: it opens the intro with the build state preserved. If a saved build exists, the intro shows a resume row under the die: "You have a build in progress. [Resume] [Clear it]".
 
+### 4.12 Present view (classroom screen)
+
+`openPresent()` (More → "Present to class", or `F`) opens `#present-view`, a full-screen large-type rendering of the current build: brand line, the logline in large type with a cyan rule, then the five sections (Setting full width with WHEN/WHERE side by side, then Hero, Villain, Squad, Obstacles in four columns, two between 761 and 1100 px). It requests browser fullscreen; leaving fullscreen (the browser swallows Esc there) also closes the view via `fullscreenchange`. Type is sized from the viewport (`clamp(15px, 1.25vw + 0.9vh, 40px)` × `--present-scale`) and `fitPresent()` lowers the scale in 0.05 steps (floor 0.45) until nothing overflows; at ≤ 760 px it stacks to one column and scrolls instead of shrinking. Roll / Undo / Exit controls sit bottom-right at 55% opacity (full on hover/focus, always full on touch). While presenting only `R`/Space (roll; Space is left to a focused button), PageDown/→ (roll) and PageUp/← (undo) for presentation clickers, `Z` (undo), `1`–`5` (re-roll a card), `F` and Esc (exit) work; every other shortcut, `?` included, is blocked. Opening it closes the More menu and puts focus on Roll. Locked cards show an amber lock after the title and held rows an amber left rule. Only rows whose own text changed replay the fizzle. It goes through `openModal()`/`closeModal()`, so focus is trapped inside and restored on exit. `renderCards()` re-renders it whenever the build changes; changed sections replay the logline fizzle.
+
+### 4.13 Printable worksheet
+
+`printWorksheet()` (More → "Print worksheet") fills `#print-sheet` from the build and calls `window.print()`; a `beforeprint` listener does the same for Cmd/Ctrl+P. With a build on the results screen (not the intro), `html.has-print-sheet` makes `@media print` hide everything except the sheet; without one the page prints as-is. The sheet, black on white in Space Mono / Space Grotesk: title with Name and Date blanks, the logline, the five sections in two columns, then "Your turn" with six prompts (each with four ruled lines) that quote the build: describe the setting with three senses, introduce the hero by showing their first trait, the hero meets the villain, the squad arrives, get past the first obstacle, an ending that uses the hero's weakness. The footer carries the build's share URL so the class can reopen the exact seed. Prompts are built in `buildPrintSheetHtml()`; all build text goes through `escapeHtml()`.
+
 ---
 
 ## 5. UI Structure
@@ -404,6 +415,9 @@ Popover triggered by the `more_vert` button. Items:
 - Light mode / Dark mode (label reflects current theme)
 - Left-handed layout (`role="menuitemcheckbox"`, hidden at ≥ 1024 px via `@media (min-width: 1024px) { display: none }`)
 - Shake to roll (`role="menuitemcheckbox"`, `hidden` unless the device has touch + `DeviceMotionEvent`; see §10.3). Stays open on toggle so the checkmark flip is visible, like left-handed
+- Present to class (opens the present view; §4.12)
+- Print worksheet (§4.13)
+- Divider
 - Keyboard shortcuts (opens shortcuts modal)
 - Divider
 - Clear this build (destructive red)
@@ -646,6 +660,8 @@ Global shortcut handler suppresses shortcuts when any input/textarea/contentedit
 | `S` | Results screen | Open share modal |
 | `P` | Results screen | Pin the current build straight to the first free slot (replace mode if all six are full; see §4.8) |
 | `L` | Results screen | Toggle light / dark |
+| `F` | Results screen | Open the present view; inside it, `F` or Esc exits (§4.12) |
+| `R` / Space, `Z`, `1`–`5` | Present view | Roll, undo, re-roll a card — the only keys that work while presenting |
 | `1` – `5` | Results screen | Re-roll one card, top to bottom: Setting, Hero, Villain, Squad, Obstacles (follows `SECTIONS`) |
 | `?` | Anywhere | Open keyboard shortcuts panel |
 | Escape | Any time | Close the open menu, else the topmost dialog |
@@ -678,6 +694,8 @@ Shake to roll is a **More-menu toggle**, shown only where `DeviceMotionEvent` ex
 | `init()` | Entry point; wires up all listeners, applies prefs, restores the saved build, then checks the URL hash |
 | `applyPrefs()` / `loadPrefs()` / `savePrefs()` | Preferences read/write with fallback defaults |
 | `sanitizeBuild()` / `sanitizeTrait()` | Validate any build from outside (hash, pasted code, `localStorage`, pins); §3.3 |
+| `openPresent()` / `closePresent()` / `renderPresent()` / `fitPresent()` | Present view; §4.12 |
+| `buildPrintSheetHtml()` / `preparePrintSheet()` / `printWorksheet()` | Printable worksheet; §4.13 |
 | `applyMood()` / `selectMood()` | Mood combobox state sync |
 | `getDieFaceSVG()` / `setDieFace()` / `startRollIconCycle()` / `startDieIdleCycle()` | Die rendering + idle cycles |
 | `rollDie()` | Orchestrates the full roll animation + state update |
@@ -727,9 +745,10 @@ From `index.html`:
 - Favicons: .ico (multi-size), 16 / 32 / 192 / 512 PNG, `apple-touch-icon.png` (180×180).
 - `<link rel="manifest" href="manifest.webmanifest">`: `name` "Pocket Dystopia", `short_name` "Dystopia", `display: standalone`, `start_url`/`scope` `/`, background and theme colour `#080A0D`, the 192 and 512 icons.
 - Open Graph: title, description, `og:image` (1200×630), `og:url` `https://pocketdystopia.forhuman.ca/`.
-- Twitter: `summary_large_image`.
+- Open Graph also sets `og:image:alt` and `og:type` `website`.
+- Twitter: `summary_large_image`, plus `twitter:title`, `twitter:description` and `twitter:image` (as `name=` attributes).
 
-The OG image is `og-image-v2.png`.
+The OG image is `og-image-v3.png`: the glowing die beside the title, the pitch, a sample seed with the hero in green and the villain in red, and the URL. Its source is `tools/og-image.html`; regenerate with `node tools/render-og.mjs og-image-vN.png` with a new N (the script refuses anything else; uses the Playwright under `tests/` and the system Chrome), then point the meta tags at it — platforms cache previews by URL.
 
 ---
 
@@ -748,7 +767,17 @@ The OG image is `og-image-v2.png`.
 
 ---
 
-## 14. Testing Surface (manual)
+## 14. Testing Surface
+
+### Automated (Playwright)
+
+`tests/` holds an end-to-end suite with its own `package.json` (kept out of the repo root so Cloudflare's build installs nothing). `cd tests && npm ci && npx playwright test`. The config serves the repo root with `python3 -m http.server` and runs two projects, desktop (1440×900) and phone (Pixel 7). Locally it drives the installed Google Chrome (`channel: 'chrome'`), because Little Snitch on the dev machine silently drops Playwright's bundled Chromium, even for localhost; CI (`.github/workflows/test.yml`, on push to `main` and PRs) uses the bundled browser.
+
+- `data.spec.mjs`: `data.js` is append-only against the snapshot; pools < 256, no duplicate texts, known mood tags.
+- `sharing.spec.mjs`: v2 codec round-trips 300 builds (locks and mood included); a share link is 28 code chars and reopens the same build; legacy `#build=` links load and stay undoable over a saved build; a script payload is rejected and never runs; non-`DATA` text and `mood: "constructor"` are rejected; malformed links fall back without errors; the load box takes a wrapped pasted link and Enter.
+- `ui.spec.mjs`: Setting-first card order and sentence-cased logline with no console errors; a locked trait survives a roll and undo restores; a locked card holds its traits; mood change toasts; pinning, duplicate refusal, Escape layering and focus after delete; phone action bar, left-handed mirroring and no overflow; compressed view keeps a hand-opened card open; 44px touch targets (with CDP touch emulation, since device presets don't flip `pointer: coarse`); the present view (focus on Roll, R/Z/1/PageUp, blocked shortcuts, exit through leaving fullscreen when the browser grants it, F to exit) and that it fits 1024×768, 1280×720 and 1920×1080 without scrolling; printing shows only the filled worksheet. CI keeps a trace and screenshots of any failure.
+
+### Manual
 
 Smoke path to verify the build end-to-end:
 
