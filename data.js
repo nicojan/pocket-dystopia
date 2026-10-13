@@ -35,6 +35,14 @@ const DATA = {
     { text: "communicates only in dramatic whispers", mood: [] },
     { text: "has a catchphrase they use way too often", mood: [] },
     { text: "sleeps with one eye open (literally, it is glued)", mood: [] },
+    { text: "keeps a sticker-covered diary of every injustice", mood: ["political"] },
+    { text: "can fix any robot by turning it off and on again", mood: ["ai-takeover"] },
+    { text: "knows the secret menu at every vending machine", mood: ["corporate"] },
+    { text: "grew a garden on the roof using only spite and yogurt cups", mood: ["post-apocalyptic"] },
+    { text: "asks 'but why?' until the system breaks", mood: ["political"] },
+    { text: "proudly never reads the terms and conditions", mood: ["corporate", "ai-takeover"] },
+    { text: "wears a cape made from an old shower curtain", mood: ["post-apocalyptic"] },
+    { text: "only brave after a snack", mood: [] },
   ],
 
   heroWeaknesses: [
@@ -58,6 +66,14 @@ const DATA = {
     { text: "refuses to ask for directions, gets lost in every sector", mood: ["post-apocalyptic"] },
     { text: "believes every disguise works (none do)", mood: ["political"] },
     { text: "cannot remember anyone's name correctly", mood: [] },
+    { text: "trusts any robot that says 'please'", mood: ["ai-takeover"] },
+    { text: "cannot resist filling out a survey", mood: ["corporate"] },
+    { text: "hums loudly while sneaking", mood: [] },
+    { text: "believes everything printed on a poster", mood: ["political"] },
+    { text: "needs exactly nine hours of sleep or becomes a villain", mood: [] },
+    { text: "drops their only flashlight in every dark room", mood: ["post-apocalyptic"] },
+    { text: "laughs at the worst possible joke at the worst possible moment", mood: [] },
+    { text: "forgets the plan the second the plan starts", mood: [] },
   ],
 
   heroTraumas: [
@@ -81,6 +97,14 @@ const DATA = {
     { text: "made Employee of the Month but the company was evil", mood: ["corporate"] },
     { text: "pen pal turned out to be a surveillance bot", mood: ["ai-takeover"] },
     { text: "birthday party was canceled due to 'resource allocation'", mood: ["corporate"] },
+    { text: "their favorite snack was discontinued by order of the Ministry", mood: ["political"] },
+    { text: "was raised by a smart speaker that only played ads", mood: ["ai-takeover", "corporate"] },
+    { text: "lost a spelling bee to a calculator", mood: ["ai-takeover"] },
+    { text: "their pet rock was confiscated as 'evidence'", mood: ["corporate"] },
+    { text: "grew up in a bunker with only one board game (missing pieces)", mood: ["post-apocalyptic"] },
+    { text: "was blamed for the Great Cafeteria Incident (innocent!)", mood: [] },
+    { text: "had their library card cancelled for 'reading too much'", mood: ["political"] },
+    { text: "woke up one day and every clock was wrong", mood: [] },
   ],
 
   villainTraits: [
@@ -110,6 +134,14 @@ const DATA = {
     { text: "wizard who graduated from an online magic school", mood: [] },
     { text: "time-traveler who keeps making things worse", mood: [] },
     { text: "a very polite villain who apologizes before every evil deed", mood: [] },
+    { text: "CEO of Everything Incorporated (also owns the moon)", mood: ["corporate"] },
+    { text: "an AI that only speaks in motivational quotes", mood: ["ai-takeover"] },
+    { text: "mayor who banned the color yellow", mood: ["political"] },
+    { text: "warlord of the last working shopping cart", mood: ["post-apocalyptic"] },
+    { text: "the substitute teacher who never leaves", mood: [] },
+    { text: "a smart fridge with big ambitions", mood: ["ai-takeover"] },
+    { text: "a game show host who somehow runs the government", mood: ["political", "corporate"] },
+    { text: "a collector of everyone's left socks (purpose unknown)", mood: [] },
   ],
 
   villainWeaknesses: [
@@ -133,6 +165,14 @@ const DATA = {
     { text: "cannot operate the coffee machine", mood: ["corporate"] },
     { text: "trips over their own cape regularly", mood: [] },
     { text: "gets emotional during sad movies", mood: [] },
+    { text: "cannot open jars", mood: [] },
+    { text: "afraid of anything with googly eyes", mood: [] },
+    { text: "must answer every email immediately", mood: ["corporate"] },
+    { text: "crashes if asked to divide by zero", mood: ["ai-takeover"] },
+    { text: "loses all power during a recount", mood: ["political"] },
+    { text: "allergic to dust (which is everywhere now)", mood: ["post-apocalyptic"] },
+    { text: "gets distracted by their own reflection", mood: [] },
+    { text: "will stop everything to correct someone's grammar", mood: [] },
   ],
 
   squadMembers: [
@@ -162,6 +202,14 @@ const DATA = {
     { text: "the squad's self-appointed morale officer", mood: [] },
     { text: "expert in a skill nobody has ever needed until now", mood: [] },
     { text: "someone who just showed up and nobody knows why", mood: [] },
+    { text: "intern who has secretly been running the company", mood: ["corporate"] },
+    { text: "a roomba with a heart of gold", mood: ["ai-takeover"] },
+    { text: "former news anchor who still narrates everything", mood: ["political"] },
+    { text: "cartographer of the wasteland (maps drawn in crayon)", mood: ["post-apocalyptic"] },
+    { text: "grandma who knows kung fu and the bus schedule", mood: [] },
+    { text: "kid who can talk to vending machines", mood: ["ai-takeover", "corporate"] },
+    { text: "the lunch lady with a mysterious past", mood: [] },
+    { text: "a pair of twins who finish each other's sentences (wrongly)", mood: [] },
   ],
 
   settings: [
@@ -191,6 +239,14 @@ const DATA = {
     { text: "the rooftop garden above the villain's headquarters", mood: [] },
     { text: "a submarine made from recycled soda cans", mood: ["post-apocalyptic"] },
     { text: "a cave with surprisingly good interior decorating", mood: [] },
+    { text: "a city where every building is an office", mood: ["corporate"] },
+    { text: "the server room at the center of the world", mood: ["ai-takeover"] },
+    { text: "the Capitol of the Very Strict Republic", mood: ["political"] },
+    { text: "the abandoned water park (still a little wet)", mood: ["post-apocalyptic"] },
+    { text: "an underwater classroom with a leaky roof", mood: [] },
+    { text: "a smart home that has locked all the doors", mood: ["ai-takeover"] },
+    { text: "a lighthouse that only shines on billboards", mood: ["corporate", "post-apocalyptic"] },
+    { text: "a mall food court after closing time", mood: ["corporate"] },
   ],
 
   times: [
@@ -214,6 +270,14 @@ const DATA = {
     { text: "back when pizza was still free (the golden age)", mood: ["corporate"] },
     { text: "three days before the robots figure it out", mood: ["ai-takeover"] },
     { text: "during the longest Monday in recorded history", mood: ["corporate"] },
+    { text: "the day after the robots got feelings", mood: ["ai-takeover"] },
+    { text: "during the 400th quarterly meeting", mood: ["corporate"] },
+    { text: "election week, forever", mood: ["political"] },
+    { text: "fifty years after the last pizza delivery", mood: ["post-apocalyptic"] },
+    { text: "the first day of school, again", mood: [] },
+    { text: "the week every phone turned into a toaster", mood: ["ai-takeover"] },
+    { text: "during the annual Mandatory Fun Day", mood: [] },
+    { text: "the year snacks became currency", mood: ["corporate", "post-apocalyptic"] },
   ],
 
   obstacles: [
@@ -242,5 +306,13 @@ const DATA = {
     { text: "gravity keeps switching directions", mood: [] },
     { text: "the instruction manual is in a language nobody speaks", mood: [] },
     { text: "an unexpected field trip to the danger zone", mood: [] },
+    { text: "the door only opens for people who are smiling (nobody is)", mood: ["ai-takeover"] },
+    { text: "a form that must be filled out in triplicate", mood: ["corporate", "political"] },
+    { text: "a storm made entirely of glitter", mood: [] },
+    { text: "the robot guard wants to see a permission slip", mood: ["ai-takeover"] },
+    { text: "every road leads back to the same gas station", mood: ["post-apocalyptic"] },
+    { text: "a surprise parade blocks the street", mood: ["political"] },
+    { text: "the hero's shoelaces are untied (all of them)", mood: [] },
+    { text: "the escape tunnel is full of extremely slow snails", mood: ["corporate"] },
   ],
 };
