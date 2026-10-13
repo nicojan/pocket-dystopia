@@ -26,7 +26,15 @@ export function legacyLinkFor(page, mutate) {
 export function collectErrors(page) {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error' && !/fonts\.(googleapis|gstatic)/.test(m.text())) errors.push(m.text()); });
+  // Third-party requests can be blocked by the environment (ad blockers,
+  // Little Snitch) without the site being at fault: Google Fonts, and the
+  // Cloudflare Web Analytics beacon the edge injects in production.
+  const thirdParty = /fonts\.(googleapis|gstatic)\.com|cloudflareinsights\.com/;
+  page.on('console', m => {
+    if (m.type() !== 'error') return;
+    if (thirdParty.test(m.text()) || thirdParty.test(m.location()?.url || '')) return;
+    errors.push(m.text());
+  });
   return errors;
 }
 
