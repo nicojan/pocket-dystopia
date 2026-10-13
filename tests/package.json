@@ -1,0 +1,11 @@
+{
+  "name": "pocket-dystopia-tests",
+  "private": true,
+  "description": "End-to-end tests for the static site. Kept out of the repo root so Cloudflare's build installs nothing.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  }
+}

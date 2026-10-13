@@ -8,5 +8,10 @@ wrangler.toml
 .assetsignore
 .gitignore
 
+# Tests and CI — not part of the site
+tests/
+.github/
+tools/
+
 # Source control
 .git/
