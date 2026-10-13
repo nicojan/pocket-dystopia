@@ -1,6 +1,7 @@
 # Internal docs — not for public consumption
 BUILD-SPEC.md
 spec.md
+UX-AUDIT-2026-10-13.md
 
 # Config — should not be served
 wrangler.toml

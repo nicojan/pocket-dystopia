@@ -1,5 +1,11 @@
 // Pocket Dystopia - Trait Data with Mood Tags
 // All traits are safe for elementary school classrooms.
+//
+// ⚠️ APPEND-ONLY. Share links (#b=…) store each trait as its INDEX in these
+// arrays, so reordering, inserting or deleting an entry silently changes what
+// every previously shared link shows. Add new entries at the END of a pool.
+// To retire one, edit its text in place rather than removing it. Each pool
+// must stay under 256 entries (one byte per index).
 
 const DATA = {
   heroTraits: [

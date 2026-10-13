@@ -16,6 +16,9 @@ let dieIdleInterval = null;
 // Snapshot of the last rendered state, used to detect which traits changed
 // between renders so we can play the CRT-fizzle animation only on new ones.
 let lastRenderedSnapshot = null;
+// Cards the user opened or closed by hand in Compressed/Expanded view, so a
+// re-render (lock, swap, undo…) doesn't snap them back. Cleared by setView.
+let manualExpanded = {};
 // Section keys scheduled to play the card-pulse effect on next render.
 const pulseAfterRender = new Set();
 
@@ -74,20 +77,21 @@ function setDieFace(n) {
 let rollIconInterval = null;
 function startRollIconCycle() {
   if (rollIconInterval) clearInterval(rollIconInterval);
-  const el = document.getElementById('roll-die-icon');
-  if (!el) return;
+  const els = document.querySelectorAll('.roll-die-icon');
+  if (els.length === 0) return;
   let last = 0;
   const tick = () => {
     let f;
     do { f = Math.floor(Math.random() * 6) + 1; } while (f === last);
     last = f;
-    el.innerHTML = getDieFaceSVG(f, {
+    const svg = getDieFaceSVG(f, {
       pipFill: 'currentColor',
       stroke: 'currentColor',
       fill: 'transparent',
       strokeWidth: 6,
       dashed: false,
     });
+    els.forEach(el => { el.innerHTML = svg; });
   };
   tick();
   rollIconInterval = setInterval(tick, 500);
@@ -97,17 +101,24 @@ function startRollIconCycle() {
 // Preferences
 // ============================================
 
+const DEFAULT_PREFS = { theme: null, leftHanded: false, defaultView: 'expanded', mood: 'all' };
+
 function loadPrefs() {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
-    return raw ? JSON.parse(raw) : { theme: null, leftHanded: false, defaultView: 'expanded', mood: 'all' };
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' ? { ...DEFAULT_PREFS, ...parsed } : { ...DEFAULT_PREFS };
   } catch {
-    return { theme: null, leftHanded: false, defaultView: 'expanded', mood: 'all' };
+    return { ...DEFAULT_PREFS };
   }
 }
 
 function savePrefs(prefs) {
-  localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // Storage blocked (site data off, private mode) — prefs last this visit only.
+  }
 }
 
 function applyPrefs() {
@@ -117,7 +128,7 @@ function applyPrefs() {
   document.documentElement.setAttribute('data-left-handed', String(prefs.leftHanded));
   updateMoreMenuState();
   setView(prefs.defaultView || 'expanded');
-  applyMood(prefs.mood || 'all', { skipReroll: true });
+  applyMood(isMood(prefs.mood) ? prefs.mood : 'all', { skipReroll: true });
 }
 
 // Sync the "More" overflow menu labels / checked-state with the live prefs.
@@ -131,6 +142,12 @@ function updateMoreMenuState() {
   const lhItem = document.querySelector('.more-menu-lefthand');
   const leftHanded = document.documentElement.getAttribute('data-left-handed') === 'true';
   if (lhItem) lhItem.setAttribute('aria-checked', String(leftHanded));
+
+  const shakeItem = document.querySelector('.more-menu-shake');
+  if (shakeItem) {
+    shakeItem.hidden = !shakeSupported();
+    shakeItem.setAttribute('aria-checked', String(shakeEnabled));
+  }
 }
 
 // ============================================
@@ -164,8 +181,10 @@ function setView(mode) {
   const btnExpanded = document.getElementById('btn-expanded');
   const btnCompressed = document.getElementById('btn-compressed');
 
+  const canCollapse = window.matchMedia(COLLAPSE_MQ).matches;
+  manualExpanded = {};
   if (mode === 'expanded') {
-    cards.forEach(c => c.classList.add('expanded'));
+    cards.forEach(c => setCardExpanded(c, true));
     if (btnExpanded) {
       btnExpanded.classList.add('active');
       btnExpanded.setAttribute('aria-pressed', 'true');
@@ -175,7 +194,7 @@ function setView(mode) {
       btnCompressed.setAttribute('aria-pressed', 'false');
     }
   } else {
-    cards.forEach(c => c.classList.remove('expanded'));
+    cards.forEach(c => setCardExpanded(c, !canCollapse));
     if (btnExpanded) {
       btnExpanded.classList.remove('active');
       btnExpanded.setAttribute('aria-pressed', 'false');
@@ -195,6 +214,11 @@ function setView(mode) {
 // ============================================
 
 // Mood values map to the labels shown in the custom combobox.
+// Own-property check — MOOD_LABELS['constructor'] would otherwise be truthy.
+function isMood(mood) {
+  return typeof mood === 'string' && Object.prototype.hasOwnProperty.call(MOOD_LABELS, mood);
+}
+
 const MOOD_LABELS = {
   'all': 'All moods',
   'corporate': 'Corporate dystopia',
@@ -208,7 +232,7 @@ let currentMood = 'all';
 function applyMood(mood, opts = {}) {
   currentMood = mood;
   const labelEl = document.getElementById('mood-combobox-label');
-  if (labelEl) labelEl.textContent = MOOD_LABELS[mood] || mood;
+  if (labelEl) labelEl.textContent = isMood(mood) ? MOOD_LABELS[mood] : MOOD_LABELS.all;
   // Update checkmarks on each option.
   document.querySelectorAll('.mood-option').forEach(li => {
     const match = li.dataset.mood === mood;
@@ -220,11 +244,20 @@ function applyMood(mood, opts = {}) {
 }
 
 function selectMood(mood) {
+  const changed = mood !== currentMood;
   const prefs = loadPrefs();
   savePrefs({ ...prefs, mood });
-  applyMood(mood);
   closeMoodListbox();
   document.getElementById('mood-combobox')?.focus();
+  if (!changed) return;
+  applyMood(mood);
+  // Picking a mood re-rolls everything unlocked — say so, since it replaces
+  // traits the user may have been looking at. Undo covers it.
+  if (buildState) {
+    showToast(mood === 'all'
+      ? 'Re-rolled with all moods. Locks kept.'
+      : `Re-rolled for ${MOOD_LABELS[mood]}. Locks kept.`);
+  }
 }
 
 function getCurrentMood() {
@@ -637,12 +670,30 @@ function snapshotTraitTexts(state) {
   return out;
 }
 
+// Display order, top to bottom. Setting leads because it frames everything
+// (the logline opens with it too). Keyboard shortcuts 1–5, the text export
+// and the share image all follow this order.
+const SECTIONS = [
+  { key: 'setting', title: 'THE SETTING', display: 'The Setting' },
+  { key: 'hero', title: 'THE HERO', display: 'The Hero' },
+  { key: 'villain', title: 'THE VILLAIN', display: 'The Villain' },
+  { key: 'squad', title: 'THE SQUAD', display: 'The Squad' },
+  { key: 'obstacles', title: 'OBSTACLES', display: 'Obstacles' },
+];
+const SECTION_KEYS = SECTIONS.map(s => s.key);
+const SECTION_LABELS = Object.fromEntries(SECTIONS.map(s => [s.key, s.display]));
+
+// Below this width cards can collapse (the Expanded/Compressed toggle is
+// visible). Keep in sync with the 1024px breakpoint in styles.css.
+const COLLAPSE_MQ = '(max-width: 1023.98px)';
+
 function renderCards() {
   if (!buildState) return;
 
   const container = document.getElementById('results-container');
   const prefs = loadPrefs();
   const viewMode = prefs.defaultView || 'expanded';
+  const canCollapse = window.matchMedia(COLLAPSE_MQ).matches;
 
   const prev = lastRenderedSnapshot;
   const current = snapshotTraitTexts(buildState);
@@ -653,45 +704,44 @@ function renderCards() {
 
   renderLogline(changedKeys);
 
-  const sections = [
-    { key: 'hero', title: 'THE HERO', display: 'The Hero', icon: 'person' },
-    { key: 'villain', title: 'THE VILLAIN', display: 'The Villain', icon: 'skull' },
-    { key: 'squad', title: 'THE SQUAD', display: 'The Squad', icon: 'groups' },
-    { key: 'setting', title: 'THE SETTING', display: 'The Setting', icon: 'location_on' },
-    { key: 'obstacles', title: 'OBSTACLES', display: 'Obstacles', icon: 'warning' },
-  ];
-
-  container.innerHTML = sections.map(({ key, title, display }) => {
+  container.innerHTML = SECTIONS.map(({ key, title, display }) => {
     const section = buildState.sections[key];
     const isLocked = section.locked;
-    const expandedClass = viewMode === 'expanded' ? ' expanded' : '';
+    const wantExpanded = typeof manualExpanded[key] === 'boolean' ? manualExpanded[key] : viewMode === 'expanded';
+    const isExpanded = wantExpanded || !canCollapse;
+    const expandedClass = wantExpanded ? ' expanded' : '';
     const lockedClass = isLocked ? ' locked' : '';
 
     let traitsHtml = '';
     let summaryText = '';
+    let hiddenCount = 0;
 
     if (key === 'setting') {
       traitsHtml = renderSettingTraits(section, changedKeys);
-      summaryText = `${section.when.text} — ${section.where.text}`;
+      summaryText = section.where.text;
+      hiddenCount = 1;
     } else {
       traitsHtml = renderSectionTraits(key, section, changedKeys);
-      const firstTrait = section.traits?.[0];
-      summaryText = firstTrait ? firstTrait.text : '';
+      summaryText = section.traits?.[0]?.text || '';
+      hiddenCount = (section.traits?.length || 0) - 1
+        + (section.weakness ? 1 : 0) + (section.trauma ? 1 : 0);
     }
+    const moreHtml = hiddenCount > 0
+      ? ` <span class="card-summary-more">+${hiddenCount} more</span>`
+      : '';
 
     const contentId = `card-content-${key}`;
-    const isExpanded = viewMode === 'expanded';
     return `
-      <section class="card${expandedClass}${lockedClass}" data-section="${key}" aria-labelledby="card-title-${key}">
+      <section class="card card-${key}${expandedClass}${lockedClass}" data-section="${key}" aria-labelledby="card-title-${key}">
         <div class="card-header">
           <h2 class="card-header-title" id="card-title-${key}"><span class="card-header-prefix" aria-hidden="true">&gt;&gt;</span> ${title}</h2>
           <div class="card-header-actions">
-            <button class="btn-icon" onclick="rerollSection('${key}')" aria-label="Re-roll this card" title="Re-roll this card"${isLocked ? ' disabled' : ''}>
+            <button class="btn-icon" onclick="rerollSection('${key}')" aria-label="Re-roll ${display}" title="${isLocked ? 'Unlock to re-roll' : 'Re-roll this card'}"${isLocked ? ' disabled' : ''}>
               <span class="material-symbols-outlined" aria-hidden="true">casino</span>
             </button>
             <button class="btn-icon lock-icon ${isLocked ? 'icon-filled' : ''}"
               onclick="toggleSectionLock('${key}')"
-              aria-label="${isLocked ? 'Unlock' : 'Lock'} this card"
+              aria-label="Lock ${display}"
               title="${isLocked ? 'Unlock this card' : 'Lock this card'}"
               aria-pressed="${isLocked}">
               <span class="material-symbols-outlined ${isLocked ? 'icon-filled' : ''}" aria-hidden="true">${isLocked ? 'lock' : 'lock_open'}</span>
@@ -705,9 +755,11 @@ function renderCards() {
             </button>
           </div>
         </div>
-        <div class="card-summary">${summaryText}...</div>
-        <div class="card-content" id="${contentId}">
-          <div class="card-body">${traitsHtml}</div>
+        <div class="card-summary" aria-hidden="true">${escapeHtml(summaryText)}${moreHtml}</div>
+        <div class="card-content" id="${contentId}"${isExpanded ? '' : ' inert'}>
+          <div class="card-content-inner">
+            <div class="card-body">${traitsHtml}</div>
+          </div>
         </div>
       </section>
     `;
@@ -744,19 +796,31 @@ const LOGLINE_SOURCE_KEYS = [
   'obstacles:traits:0',
 ];
 
+// Trait text is written lowercase for list use; the logline stitches it into
+// sentences, so each sentence gets a capital and a closing full stop.
+function capitalize(str) {
+  return str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
+}
+
+function sentence(str) {
+  const s = capitalize(str.trim());
+  return /[.!?…]['’")]*$/.test(s) ? s : `${s}.`;
+}
+
 function buildLoglineText(state) {
   if (!state || !state.sections) return '';
   const s = state.sections;
   const parts = [];
   const where = s.setting?.where?.text;
   const when = s.setting?.when?.text;
-  if (where && when) parts.push(`In ${where}, ${when}.`);
+  if (where && when) parts.push(sentence(`In ${where}, ${when}`));
   const hero0 = s.hero?.traits?.[0]?.text;
   const villain0 = s.villain?.traits?.[0]?.text;
-  if (hero0 && villain0) parts.push(`${hero0} meets ${villain0}.`);
+  if (hero0 && villain0) parts.push(sentence(`${hero0} meets ${villain0}`));
   const squad0 = s.squad?.traits?.[0]?.text;
   const obstacle0 = s.obstacles?.traits?.[0]?.text;
-  if (squad0 && obstacle0) parts.push(`${squad0} gets dragged in. ${obstacle0}.`);
+  if (squad0) parts.push(sentence(`${squad0} gets dragged in`));
+  if (obstacle0) parts.push(sentence(obstacle0));
   return parts.join(' ');
 }
 
@@ -794,29 +858,25 @@ function copyLogline(event) {
   const text = buildLoglineText(buildState);
   if (!text) return;
   const trigger = event?.currentTarget;
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('Logline copied');
-    flashCopyCheck(trigger);
-  }).catch(() => {
-    showToast('Copy failed');
-  });
+  copyText(text, 'Logline copied', trigger);
 }
 
 function renderSectionTraits(sectionKey, section, changedKeys) {
+  const sectionLocked = section.locked;
   let html = '';
 
   if (section.traits) {
     html += section.traits.map((trait, i) =>
-      renderTraitLine('>', trait.text, trait.locked, sectionKey, 'traits', i, false, changedKeys)
+      renderTraitLine('>', trait.text, trait.locked, sectionKey, 'traits', i, false, changedKeys, sectionLocked)
     ).join('');
   }
 
   if (section.weakness) {
-    html += renderTraitLine('WEAK:', section.weakness.text, section.weakness.locked, sectionKey, 'weakness', null, true, changedKeys);
+    html += renderTraitLine('WEAK:', section.weakness.text, section.weakness.locked, sectionKey, 'weakness', null, true, changedKeys, sectionLocked);
   }
 
   if (section.trauma) {
-    html += renderTraitLine('TRAUMA:', section.trauma.text, section.trauma.locked, sectionKey, 'trauma', null, true, changedKeys);
+    html += renderTraitLine('TRAUMA:', section.trauma.text, section.trauma.locked, sectionKey, 'trauma', null, true, changedKeys, sectionLocked);
   }
 
   return html;
@@ -824,31 +884,34 @@ function renderSectionTraits(sectionKey, section, changedKeys) {
 
 function renderSettingTraits(section, changedKeys) {
   let html = '';
-  html += renderTraitLine('WHEN:', section.when.text, section.when.locked, 'setting', 'when', null, true, changedKeys);
-  html += renderTraitLine('WHERE:', section.where.text, section.where.locked, 'setting', 'where', null, true, changedKeys);
+  html += renderTraitLine('WHEN:', section.when.text, section.when.locked, 'setting', 'when', null, true, changedKeys, section.locked);
+  html += renderTraitLine('WHERE:', section.where.text, section.where.locked, 'setting', 'where', null, true, changedKeys, section.locked);
   return html;
 }
 
-function renderTraitLine(prefix, text, locked, sectionKey, traitType, index, isLabel, changedKeys) {
-  const lockedClass = locked ? ' trait-locked' : '';
+function renderTraitLine(prefix, text, locked, sectionKey, traitType, index, isLabel, changedKeys, sectionLocked = false) {
+  // A locked card holds every trait in it, whatever the trait's own lock says.
+  const held = locked || sectionLocked;
+  const lockedClass = held ? ' trait-locked' : '';
   const snapshotKey = index !== null && index !== undefined
     ? `${sectionKey}:${traitType}:${index}`
     : `${sectionKey}:${traitType}`;
   const fizzleClass = changedKeys && changedKeys.has(snapshotKey) ? ' trait-fizzle' : '';
-  const lockIcon = locked ? 'lock' : 'lock_open';
-  const iconClass = locked ? ' icon-filled' : '';
+  const lockIcon = held ? 'lock' : 'lock_open';
+  const iconClass = held ? ' icon-filled' : '';
   const idxArg = index !== null && index !== undefined ? `,${index}` : '';
   const lockClickHandler = `toggleTraitLock('${sectionKey}','${traitType}'${idxArg})`;
   const swapClickHandler = `rerollSingleTrait('${sectionKey}','${traitType}'${idxArg})`;
 
   const prefixHtml = isLabel
     ? `<span class="trait-label">${prefix}</span>`
-    : `<span class="trait-prefix">${prefix}</span>`;
+    : `<span class="trait-prefix" aria-hidden="true">${prefix}</span>`;
 
   const truncated = text.length > 40 ? text.slice(0, 40) + '…' : text;
-  const swapLabel = `Swap trait: ${escapeHtml(truncated)}`;
-  const swapTitle = locked ? 'Unlock to swap' : 'Swap this one';
-  const lockLabel = locked ? 'Release this' : 'Keep this';
+  const swapLabel = `Swap: ${truncated}`;
+  const swapTitle = held ? 'Unlock to swap' : 'Swap this one';
+  const lockLabel = `Keep: ${truncated}`;
+  const lockTitle = sectionLocked ? 'Card is locked' : (locked ? 'Release this' : 'Keep this');
 
   return `
     <div class="trait-line${lockedClass}${fizzleClass}">
@@ -857,14 +920,14 @@ function renderTraitLine(prefix, text, locked, sectionKey, traitType, index, isL
       <div class="trait-actions">
         <button class="btn-icon trait-swap"
           onclick="${swapClickHandler}"
-          aria-label="${swapLabel}"
-          title="${swapTitle}"${locked ? ' disabled' : ''}>
+          aria-label="${escapeHtml(swapLabel)}"
+          title="${swapTitle}"${held ? ' disabled' : ''}>
           <span class="material-symbols-outlined" aria-hidden="true">replay</span>
         </button>
         <button class="btn-icon trait-lock" onclick="${lockClickHandler}"
-          aria-label="${lockLabel}"
-          title="${lockLabel}"
-          aria-pressed="${locked}">
+          aria-label="${escapeHtml(lockLabel)}"
+          title="${lockTitle}"
+          aria-pressed="${held}"${sectionLocked ? ' disabled' : ''}>
           <span class="material-symbols-outlined${iconClass}" aria-hidden="true">${lockIcon}</span>
         </button>
       </div>
@@ -872,34 +935,40 @@ function renderTraitLine(prefix, text, locked, sectionKey, traitType, index, isL
   `;
 }
 
+// Escapes for both text content and attribute values (quotes included).
+// Every string that reaches innerHTML goes through here.
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+  return String(str ?? '').replace(/[&<>"']/g, ch => HTML_ESCAPES[ch]);
 }
 
 // ============================================
 // Card Expand/Collapse
 // ============================================
 
-function toggleCardExpand(sectionKey) {
-  // Non-mobile keeps every card expanded — collapse is a mobile-only affordance.
-  if (window.matchMedia('(min-width: 768px)').matches) return;
-  const card = document.querySelector(`.card[data-section="${sectionKey}"]`);
-  if (!card) return;
-  card.classList.toggle('expanded');
-  const expanded = card.classList.contains('expanded');
+function setCardExpanded(card, expanded) {
+  card.classList.toggle('expanded', expanded);
+  const content = card.querySelector('.card-content');
+  // Collapsed content stays in the DOM for the animation; inert keeps its
+  // buttons out of the tab order and away from screen readers.
+  if (content) content.inert = !expanded;
   const chevron = card.querySelector('.card-chevron');
   if (chevron) {
     chevron.setAttribute('aria-expanded', String(expanded));
-    // Find the section display name for the accessible label.
-    const sectionLabels = {
-      hero: 'The Hero', villain: 'The Villain', squad: 'The Squad',
-      setting: 'The Setting', obstacles: 'Obstacles',
-    };
-    const label = sectionLabels[sectionKey] || sectionKey;
+    const label = SECTION_LABELS[card.dataset.section] || card.dataset.section;
     chevron.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} ${label}`);
   }
+}
+
+function toggleCardExpand(sectionKey) {
+  // Wide layouts keep every card open — collapse only exists where the
+  // Expanded/Compressed toggle is shown.
+  if (!window.matchMedia(COLLAPSE_MQ).matches) return;
+  const card = document.querySelector(`.card[data-section="${sectionKey}"]`);
+  if (!card) return;
+  const next = !card.classList.contains('expanded');
+  manualExpanded = { ...manualExpanded, [sectionKey]: next };
+  setCardExpanded(card, next);
 }
 
 // ============================================
@@ -919,15 +988,12 @@ function toggleSectionLock(sectionKey) {
   };
   saveBuildState();
   renderCards();
-  const labels = {
-    hero: 'The Hero', villain: 'The Villain', squad: 'The Squad',
-    setting: 'The Setting', obstacles: 'Obstacles',
-  };
-  announce(`${labels[sectionKey] || sectionKey} ${willBeLocked ? 'locked' : 'unlocked'}`);
+  announce(`${SECTION_LABELS[sectionKey] || sectionKey} ${willBeLocked ? 'locked' : 'unlocked'}`);
 }
 
 function toggleTraitLock(sectionKey, traitType, index) {
   if (!buildState) return;
+  if (buildState.sections[sectionKey]?.locked) return;
   const section = { ...buildState.sections[sectionKey] };
   let willBeLocked = false;
 
@@ -980,7 +1046,7 @@ const TRAIT_POOL_MAP = {
 function rerollSingleTrait(sectionKey, traitType, index) {
   if (!buildState) return;
   const section = buildState.sections[sectionKey];
-  if (!section) return;
+  if (!section || section.locked) return;
 
   const isArrayTrait = index !== undefined && index !== null;
   const currentTrait = isArrayTrait ? section.traits[index] : section[traitType];
@@ -1059,31 +1125,28 @@ function undo() {
 }
 
 let undoLabelTimeout = null;
+let undoHintShown = false;
 
 function updateUndoButton() {
   const btn = document.getElementById('btn-undo');
+  const barBtn = document.getElementById('btn-undo-bar');
+  const shouldDisable = history.length === 0;
+  if (barBtn) barBtn.disabled = shouldDisable;
   if (!btn) return;
   const wasDisabled = btn.disabled;
-  const shouldDisable = history.length === 0;
   btn.disabled = shouldDisable;
-  btn.title = shouldDisable ? 'Nothing to undo yet' : 'Undo last roll';
+  btn.title = shouldDisable ? 'Nothing to undo yet' : 'Undo last change (Z)';
 
-  // Transition from disabled → enabled: flash the "Undo roll" label for 1.5s.
-  if (wasDisabled && !shouldDisable) {
+  // The first time undo becomes available, float its label under the button
+  // for a moment so people learn it exists. It's positioned absolutely, so
+  // nothing in the top bar moves.
+  if (wasDisabled && !shouldDisable && !undoHintShown) {
+    undoHintShown = true;
     btn.classList.add('btn-undo-label-visible');
     if (undoLabelTimeout) clearTimeout(undoLabelTimeout);
     undoLabelTimeout = setTimeout(() => {
       btn.classList.remove('btn-undo-label-visible');
-    }, 1500);
-  } else if (!shouldDisable && !wasDisabled) {
-    // Subsequent pushes: retrigger the label so it pops again.
-    btn.classList.remove('btn-undo-label-visible');
-    void btn.offsetWidth;
-    btn.classList.add('btn-undo-label-visible');
-    if (undoLabelTimeout) clearTimeout(undoLabelTimeout);
-    undoLabelTimeout = setTimeout(() => {
-      btn.classList.remove('btn-undo-label-visible');
-    }, 1500);
+    }, 1800);
   }
 }
 
@@ -1106,93 +1169,380 @@ function flashCopyCheck(triggerEl) {
   }, 1000);
 }
 
+// Clipboard write with a legacy fallback for browsers (or insecure origins)
+// where navigator.clipboard is missing or refuses.
+function copyText(text, successMsg, trigger) {
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  };
+  const done = ok => {
+    showToast(ok ? successMsg : 'Copy failed. Select the text and copy it by hand.');
+    if (ok) flashCopyCheck(trigger);
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => done(true), () => done(fallback()));
+  } else {
+    done(fallback());
+  }
+}
+
 function copyBuild(event) {
   if (!buildState) return;
-  const text = formatBuildText();
-  const trigger = event?.currentTarget;
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('Copied');
-    flashCopyCheck(trigger);
-  }).catch(() => {
-    showToast('Copy failed');
-  });
+  copyText(formatBuildText(), 'Copied as text', event?.currentTarget);
+}
+
+// Ordered rows for each section, shared by the text export and the image.
+function sectionRows(key, section) {
+  if (key === 'setting') {
+    return [['WHEN:', section.when.text], ['WHERE:', section.where.text]];
+  }
+  const rows = (section.traits || []).map(t => ['>', t.text]);
+  if (section.weakness) rows.push(['WEAK:', section.weakness.text]);
+  if (section.trauma) rows.push(['TRAUMA:', section.trauma.text]);
+  return rows;
 }
 
 function formatBuildText() {
   const s = buildState.sections;
   let text = 'POCKET DYSTOPIA - Story Seed\n============================\n\n';
-
-  text += '>> THE HERO\n';
-  s.hero.traits.forEach(t => { text += `> ${t.text}\n`; });
-  text += `WEAK: ${s.hero.weakness.text}\n`;
-  text += `TRAUMA: ${s.hero.trauma.text}\n\n`;
-
-  text += '>> THE VILLAIN\n';
-  s.villain.traits.forEach(t => { text += `> ${t.text}\n`; });
-  text += `WEAK: ${s.villain.weakness.text}\n\n`;
-
-  text += '>> THE SQUAD\n';
-  s.squad.traits.forEach(t => { text += `> ${t.text}\n`; });
-  text += '\n';
-
-  text += '>> THE SETTING\n';
-  text += `WHEN: ${s.setting.when.text}\n`;
-  text += `WHERE: ${s.setting.where.text}\n\n`;
-
-  text += '>> OBSTACLES\n';
-  s.obstacles.traits.forEach(t => { text += `> ${t.text}\n`; });
-
+  text += `${buildLoglineText(buildState)}\n\n`;
+  text += SECTIONS.map(({ key, title }) =>
+    `>> ${title}\n` + sectionRows(key, s[key]).map(([p, t]) => `${p} ${t}`).join('\n')
+  ).join('\n\n');
+  text += `\n\n${buildShareUrl(buildState)}\n`;
   return text;
 }
 
 // ============================================
-// Screenshot
+// Share image (drawn on a canvas — no screenshot of the UI)
 // ============================================
 
-async function saveScreenshot(event) {
-  const container = document.getElementById('results-container');
-  const trigger = event?.currentTarget;
-  if (!container || typeof html2canvas === 'undefined') {
-    showToast('Screenshot failed');
-    return;
-  }
+const SHARE_IMG_W = 1080;
+const SHARE_IMG_H = 1350;
 
+function wrapLines(ctx, text, maxWidth) {
+  const words = text.split(/\s+/);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+// Lays out (and, when draw is true, paints) the share card at a given type
+// scale. Returns the content height so the caller can shrink to fit.
+function layoutShareImage(ctx, state, scale, colors, draw) {
+  const pad = 80;
+  const width = SHARE_IMG_W - pad * 2;
+  const mono = '"Space Mono", "Courier New", monospace';
+  const display = '"Space Grotesk", system-ui, sans-serif';
+  let y = pad;
+
+  const text = (str, font, color, x, yy) => {
+    if (!draw) return;
+    ctx.font = font;
+    ctx.fillStyle = color;
+    ctx.fillText(str, x, yy);
+  };
+
+  // Title
+  const titleSize = Math.round(56 * scale);
+  ctx.font = `700 ${titleSize}px ${display}`;
+  y += titleSize;
+  if (draw && 'letterSpacing' in ctx) ctx.letterSpacing = '4px';
+  text('POCKET DYSTOPIA', ctx.font, colors.text, pad, y);
+  if (draw && 'letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  y += Math.round(36 * scale);
+
+  // Logline, with a cyan rule beside it
+  const logSize = Math.round(30 * scale);
+  const logLead = Math.round(logSize * 1.45);
+  ctx.font = `400 ${logSize}px ${mono}`;
+  const logLines = wrapLines(ctx, buildLoglineText(state), width - 28);
+  const logTop = y;
+  logLines.forEach(l => { y += logLead; text(l, `400 ${logSize}px ${mono}`, colors.text, pad + 28, y - logLead * 0.28); });
+  if (draw) {
+    ctx.fillStyle = colors.accent;
+    ctx.fillRect(pad, logTop + 4, 4, y - logTop - 4);
+  }
+  y += Math.round(44 * scale);
+
+  // Sections
+  const headSize = Math.round(26 * scale);
+  const rowSize = Math.round(25 * scale);
+  const rowLead = Math.round(rowSize * 1.45);
+  const labelW = Math.round(116 * scale);
+  for (const { key, title } of SECTIONS) {
+    const color = key === 'hero' ? colors.hero : key === 'villain' ? colors.villain : colors.text;
+    y += headSize;
+    ctx.font = `700 ${headSize}px ${mono}`;
+    text('>> ', ctx.font, colors.muted, pad, y);
+    const prefixW = ctx.measureText('>> ').width;
+    text(title, `700 ${headSize}px ${mono}`, color, pad + prefixW, y);
+    y += Math.round(14 * scale);
+    for (const [prefix, value] of sectionRows(key, state.sections[key])) {
+      const indent = prefix === '>' ? Math.round(36 * scale) : labelW;
+      ctx.font = `400 ${rowSize}px ${mono}`;
+      const lines = wrapLines(ctx, value, width - indent);
+      y += rowLead;
+      text(prefix, `700 ${Math.round(rowSize * (prefix === '>' ? 1 : 0.78))}px ${mono}`, colors.muted, pad, y - rowLead * 0.28);
+      lines.forEach((l, i) => {
+        if (i > 0) y += rowLead;
+        text(l, `400 ${rowSize}px ${mono}`, colors.text, pad + indent, y - rowLead * 0.28);
+      });
+    }
+    y += Math.round(30 * scale);
+  }
+  return y;
+}
+
+async function renderShareImage(state) {
+  const css = getComputedStyle(document.documentElement);
+  const v = name => css.getPropertyValue(name).trim();
+  const colors = {
+    bg: v('--bg-primary'), text: v('--text-primary'), muted: v('--text-tertiary'),
+    accent: v('--accent-cyan'), hero: v('--accent-hero'), villain: v('--accent-villain'),
+  };
+  if (document.fonts?.load) {
+    await Promise.all([
+      document.fonts.load('400 25px "Space Mono"'),
+      document.fonts.load('700 25px "Space Mono"'),
+      document.fonts.load('700 56px "Space Grotesk"'),
+    ]).catch(() => {});
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = SHARE_IMG_W;
+  canvas.height = SHARE_IMG_H;
+  const ctx = canvas.getContext('2d');
+  const footer = 90;
+  // Shrink the type until everything fits above the footer.
+  let scale = 1;
+  while (scale > 0.6 && layoutShareImage(ctx, state, scale, colors, false) > SHARE_IMG_H - footer) {
+    scale -= 0.04;
+  }
+  ctx.fillStyle = colors.bg;
+  ctx.fillRect(0, 0, SHARE_IMG_W, SHARE_IMG_H);
+  layoutShareImage(ctx, state, scale, colors, true);
+  ctx.font = '400 22px "Space Mono", monospace';
+  ctx.fillStyle = colors.muted;
+  ctx.fillText(location.host || 'pocketdystopia.forhuman.ca', 80, SHARE_IMG_H - 56);
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+}
+
+async function saveScreenshot(event) {
+  if (!buildState) return;
+  const trigger = event?.currentTarget;
   try {
-    const canvas = await html2canvas(container, {
-      backgroundColor: getComputedStyle(document.documentElement)
-        .getPropertyValue('--bg-primary').trim(),
-      scale: 2,
-      useCORS: true,
-      logging: false,
-    });
-    canvas.toBlob(blob => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `pocket-dystopia-${Date.now()}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('Screenshot saved');
-      flashCopyCheck(trigger);
-    }, 'image/png');
+    const blob = await renderShareImage(buildState);
+    if (!blob) throw new Error('no blob');
+    const filename = `pocket-dystopia-${Date.now()}.png`;
+    const file = typeof File === 'function' ? new File([blob], filename, { type: 'image/png' }) : null;
+    // On phones the share sheet is the way to get an image into Photos.
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    if (coarse && file && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Pocket Dystopia' });
+        flashCopyCheck(trigger);
+        return;
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+        // NotAllowedError (the tap's activation expired while drawing) or
+        // anything else: fall through to a plain download.
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('Image saved');
+    flashCopyCheck(trigger);
   } catch {
-    showToast('Screenshot failed');
+    showToast("Couldn't make the image");
   }
 }
 
 // ============================================
-// Share / Load Build Codes
+// Validation — every build that arrives from outside (a link, a pasted
+// code, localStorage, a pin) goes through sanitizeBuild() before use.
 // ============================================
 
-function encodeBuild(state) {
+const MAX_TRAIT_LEN = 200;
+const BUILD_SHAPE = {
+  setting: { fields: ['when', 'where'] },
+  hero: { traits: 3, fields: ['weakness', 'trauma'] },
+  villain: { traits: 3, fields: ['weakness'] },
+  squad: { traits: 3, fields: [] },
+  obstacles: { traits: 2, fields: [] },
+};
+
+// Every trait must be a real entry from its pool in data.js. The app never
+// produces anything else, and this keeps a crafted link from putting
+// arbitrary words into a classroom tool.
+function sanitizeTrait(raw, pool) {
+  if (!raw || typeof raw !== 'object') return null;
+  const text = typeof raw.text === 'string' ? raw.text.trim() : '';
+  if (!text || text.length > MAX_TRAIT_LEN) return null;
+  if (!POOL_INDEX[pool]?.has(text)) return null;
+  return { text, locked: raw.locked === true };
+}
+
+function sanitizeBuild(raw) {
+  if (!raw || typeof raw !== 'object' || !raw.sections || typeof raw.sections !== 'object') return null;
+  const sections = {};
+  for (const [key, shape] of Object.entries(BUILD_SHAPE)) {
+    const src = raw.sections[key];
+    if (!src || typeof src !== 'object') return null;
+    const out = { locked: src.locked === true };
+    if (shape.traits) {
+      if (!Array.isArray(src.traits) || src.traits.length !== shape.traits) return null;
+      const traits = src.traits.map(t => sanitizeTrait(t, TRAIT_POOL_MAP[`${key}:traits`]));
+      if (traits.some(t => !t)) return null;
+      out.traits = traits;
+    }
+    for (const field of shape.fields) {
+      const t = sanitizeTrait(src[field], TRAIT_POOL_MAP[`${key}:${field}`]);
+      if (!t) return null;
+      out[field] = t;
+    }
+    sections[key] = out;
+  }
+  return {
+    version: 1,
+    timestamp: Number.isFinite(raw.timestamp) ? raw.timestamp : Date.now(),
+    mood: isMood(raw.mood) ? raw.mood : 'all',
+    sections,
+  };
+}
+
+// ============================================
+// Share codes
+// ============================================
+//
+// v2 (current): the build packed as bytes, base64url-encoded, ~30 chars.
+//   [0] version (2)   [1] mood index   [2] section-lock bits
+//   [3..4] trait-lock bits (little-endian, one per slot)   [5..20] pool index per slot
+// Slots index into DATA, which is append-only for exactly this reason.
+// v1 (legacy): base64 of URI-encoded JSON. Still decoded; produced only
+// when a build holds text that isn't in DATA.
+
+const CODE_V2 = 2;
+// Fixed bit order for section locks — never derive this from display order.
+const CODE_SECTION_ORDER = ['setting', 'hero', 'villain', 'squad', 'obstacles'];
+const MOOD_ORDER = ['all', 'corporate', 'post-apocalyptic', 'ai-takeover', 'political'];
+const CODE_SLOTS = [
+  ['setting', 'when', null, 'times'],
+  ['setting', 'where', null, 'settings'],
+  ['hero', 'traits', 0, 'heroTraits'],
+  ['hero', 'traits', 1, 'heroTraits'],
+  ['hero', 'traits', 2, 'heroTraits'],
+  ['hero', 'weakness', null, 'heroWeaknesses'],
+  ['hero', 'trauma', null, 'heroTraumas'],
+  ['villain', 'traits', 0, 'villainTraits'],
+  ['villain', 'traits', 1, 'villainTraits'],
+  ['villain', 'traits', 2, 'villainTraits'],
+  ['villain', 'weakness', null, 'villainWeaknesses'],
+  ['squad', 'traits', 0, 'squadMembers'],
+  ['squad', 'traits', 1, 'squadMembers'],
+  ['squad', 'traits', 2, 'squadMembers'],
+  ['obstacles', 'traits', 0, 'obstacles'],
+  ['obstacles', 'traits', 1, 'obstacles'],
+];
+const CODE_V2_LEN = 5 + CODE_SLOTS.length;
+
+// text → index, per pool, built once.
+const POOL_INDEX = Object.fromEntries(
+  Object.entries(DATA).map(([pool, items]) => [pool, new Map(items.map((it, i) => [it.text, i]))])
+);
+
+function slotTrait(state, [section, field, index]) {
+  const s = state.sections[section];
+  return index === null ? s[field] : s[field]?.[index];
+}
+
+function bytesToBase64Url(bytes) {
+  let bin = '';
+  bytes.forEach(b => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64UrlToBytes(str) {
+  const b64 = fromUrlSafeBase64(str);
+  const bin = atob(b64);
+  return Uint8Array.from(bin, c => c.charCodeAt(0));
+}
+
+// Returns the v2 code, or null if the build can't be expressed as indices.
+function encodeBuildV2(state) {
+  const shape = BUILD_SHAPE;
+  for (const [key, def] of Object.entries(shape)) {
+    if (def.traits && state.sections[key].traits.length !== def.traits) return null;
+  }
+  const bytes = new Uint8Array(CODE_V2_LEN);
+  bytes[0] = CODE_V2;
+  bytes[1] = Math.max(0, MOOD_ORDER.indexOf(state.mood || 'all'));
+  bytes[2] = CODE_SECTION_ORDER.reduce((bits, key, i) => bits | (state.sections[key].locked ? 1 << i : 0), 0);
+  let traitBits = 0;
+  for (let i = 0; i < CODE_SLOTS.length; i++) {
+    const slot = CODE_SLOTS[i];
+    const trait = slotTrait(state, slot);
+    const idx = trait ? POOL_INDEX[slot[3]].get(trait.text) : undefined;
+    if (idx === undefined || idx > 255) return null;
+    bytes[5 + i] = idx;
+    if (trait.locked) traitBits |= 1 << i;
+  }
+  bytes[3] = traitBits & 0xff;
+  bytes[4] = (traitBits >> 8) & 0xff;
+  return bytesToBase64Url(bytes);
+}
+
+function decodeBuildV2(code) {
+  let bytes;
+  try { bytes = base64UrlToBytes(code); } catch { return null; }
+  if (bytes.length !== CODE_V2_LEN || bytes[0] !== CODE_V2) return null;
+  const traitBits = bytes[3] | (bytes[4] << 8);
+  const sections = {
+    setting: {}, hero: { traits: [] }, villain: { traits: [] }, squad: { traits: [] }, obstacles: { traits: [] },
+  };
+  for (let i = 0; i < CODE_SLOTS.length; i++) {
+    const [section, field, index, pool] = CODE_SLOTS[i];
+    const item = DATA[pool][bytes[5 + i]];
+    if (!item) return null;
+    const trait = { text: item.text, locked: Boolean(traitBits & (1 << i)) };
+    if (index === null) sections[section][field] = trait;
+    else sections[section][field][index] = trait;
+  }
+  CODE_SECTION_ORDER.forEach((key, i) => { sections[key].locked = Boolean(bytes[2] & (1 << i)); });
+  return sanitizeBuild({ version: 1, timestamp: Date.now(), mood: MOOD_ORDER[bytes[1]] || 'all', sections });
+}
+
+function encodeBuildV1(state) {
   return btoa(encodeURIComponent(JSON.stringify(state)));
 }
 
-function decodeBuild(code) {
+function decodeBuildV1(code) {
   try {
-    const json = JSON.parse(decodeURIComponent(atob(code)));
-    if (!json.version || !json.sections) throw new Error('Invalid');
-    return json;
+    return sanitizeBuild(JSON.parse(decodeURIComponent(atob(code))));
   } catch {
     return null;
   }
@@ -1210,40 +1560,78 @@ function fromUrlSafeBase64(urlSafe) {
   return s;
 }
 
+// The code shown in the share dialog. v2 when possible.
+function encodeBuild(state) {
+  return encodeBuildV2(state) || toUrlSafeBase64(encodeBuildV1(state));
+}
+
 function buildShareUrl(state) {
-  const code = encodeBuild(state);
-  const safe = toUrlSafeBase64(code);
-  return `${location.origin}${location.pathname}#build=${safe}`;
+  const v2 = encodeBuildV2(state);
+  const hash = v2 ? `b=${v2}` : `build=${toUrlSafeBase64(encodeBuildV1(state))}`;
+  return `${location.origin}${location.pathname}#${hash}`;
+}
+
+// Accepts anything a person might paste: a full link (#b= or legacy
+// #build=), a bare v2 code, or a bare legacy code (plain or URL-safe base64).
+function decodeAnyCode(input) {
+  try {
+    return decodeAnyCodeUnsafe(input);
+  } catch {
+    return null;
+  }
+}
+
+function decodeAnyCodeUnsafe(input) {
+  // Mail clients wrap long links — whitespace is never part of a code.
+  const str = String(input || '').replace(/\s+/g, '');
+  if (!str) return null;
+  const v2Hash = str.match(/#b=([A-Za-z0-9_-]+)/);
+  if (v2Hash) return decodeBuildV2(v2Hash[1]);
+  const v1Hash = str.match(/#build=([A-Za-z0-9_\-+/=%]+)/);
+  if (v1Hash) return decodeBuildV1(fromUrlSafeBase64(decodeURIComponent(v1Hash[1])));
+  return decodeBuildV2(str) || decodeBuildV1(str) || decodeBuildV1(fromUrlSafeBase64(str));
+}
+
+// Replaces the current build with a loaded one, keeping it undoable.
+function adoptLoadedBuild(state) {
+  if (buildState) pushHistory();
+  buildState = state;
+  isFirstRoll = false;
+  if (state.mood && state.mood !== currentMood) {
+    savePrefs({ ...loadPrefs(), mood: state.mood });
+    applyMood(state.mood, { skipReroll: true });
+  }
+  saveBuildState();
+  showResults();
+  renderCards();
 }
 
 function tryLoadFromHash() {
   const hash = window.location.hash || '';
-  const match = hash.match(/^#build=(.+)$/);
-  if (!match) return false;
+  if (!/^#(b|build)=/.test(hash)) return false;
 
-  const decoded = decodeBuild(fromUrlSafeBase64(match[1]));
+  const hadBuild = Boolean(buildState);
+  const decoded = decodeAnyCode(hash);
   // Always strip the hash so a reload doesn't re-trigger, even on failure.
   // Use window.history explicitly — `history` is shadowed by the undo stack.
   window.history.replaceState(null, '', window.location.pathname);
 
   if (!decoded) {
     // Delay the toast so it doesn't fire before the intro paints.
-    setTimeout(() => showToast("That build code didn't work. Starting fresh."), 300);
+    setTimeout(() => showToast(hadBuild
+      ? "That link didn't work. Here's your last build."
+      : "That link didn't work. Starting fresh."), 300);
     return false;
   }
 
-  buildState = decoded;
-  isFirstRoll = false;
-  saveBuildState();
-  showResults();
-  renderCards();
+  adoptLoadedBuild(decoded);
+  if (hadBuild) setTimeout(() => showToast('Shared build loaded. Undo to go back.'), 300);
   return true;
 }
 
 function openShareModal() {
   if (!buildState) return;
-  const code = encodeBuild(buildState);
-  document.getElementById('share-code').value = code;
+  document.getElementById('share-code').value = encodeBuild(buildState);
 
   // Show Web Share button only if the browser supports the API.
   const webShareBtn = document.getElementById('share-web-share');
@@ -1282,7 +1670,7 @@ async function shareViaWebShareApi() {
   try {
     await navigator.share({
       title: 'Pocket Dystopia — my build',
-      text: "Here's a dystopian story seed I rolled.",
+      text: buildLoglineText(buildState),
       url,
     });
   } catch {
@@ -1292,27 +1680,12 @@ async function shareViaWebShareApi() {
 
 function copyShareLink(event) {
   if (!buildState) return;
-  const url = buildShareUrl(buildState);
-  const trigger = event?.currentTarget;
-  navigator.clipboard.writeText(url).then(() => {
-    showToast('Link copied');
-    flashCopyCheck(trigger);
-  }).catch(() => {
-    showToast('Copy failed');
-  });
+  copyText(buildShareUrl(buildState), 'Link copied', event?.currentTarget);
 }
 
 function copyShareCode(event) {
-  const textarea = document.getElementById('share-code');
-  const trigger = event?.currentTarget;
-  navigator.clipboard.writeText(textarea.value).then(() => {
-    showToast('Code copied');
-    flashCopyCheck(trigger);
-  }).catch(() => {
-    textarea.select();
-    document.execCommand('copy');
-    showToast('Code copied');
-  });
+  const input = document.getElementById('share-code');
+  copyText(input.value, 'Code copied', event?.currentTarget);
 }
 
 function toggleLoadDisclosure() {
@@ -1335,23 +1708,24 @@ function loadBuildFromInput() {
   const code = input.value.trim();
 
   if (!code) {
-    errorEl.textContent = 'Please paste a build code';
+    errorEl.textContent = 'Paste a link or code first.';
+    input.focus();
     return;
   }
 
-  const decoded = decodeBuild(code);
+  const decoded = decodeAnyCode(code);
   if (!decoded) {
-    errorEl.textContent = 'Invalid build code';
+    errorEl.textContent = "That code didn't work. Paste the whole link or code exactly as it was shared.";
+    input.setAttribute('aria-invalid', 'true');
     return;
   }
 
   errorEl.textContent = '';
-  buildState = decoded;
-  isFirstRoll = false;
-  saveBuildState();
-  showResults();
-  renderCards();
-  showToast('Build loaded!');
+  input.removeAttribute('aria-invalid');
+  input.value = '';
+  const hadBuild = Boolean(buildState);
+  adoptLoadedBuild(decoded);
+  showToast(hadBuild ? 'Build loaded. Undo to go back.' : 'Build loaded');
 }
 
 // ============================================
@@ -1360,22 +1734,20 @@ function loadBuildFromInput() {
 
 function saveBuildState() {
   if (!buildState) return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(buildState));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(buildState));
+  } catch {
+    // Storage full or blocked (private mode) — the build still works this session.
+  }
 }
 
 function loadSavedState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const state = JSON.parse(raw);
-      if (state && state.version && state.sections) {
-        return state;
-      }
-    }
+    return raw ? sanitizeBuild(JSON.parse(raw)) : null;
   } catch {
-    // Ignore
+    return null;
   }
-  return null;
 }
 
 // ============================================
@@ -1398,12 +1770,16 @@ function closeConfirm() {
       yes.textContent = 'Clear it';
       yes.onclick = executeReset;
     }
+    const title = document.getElementById('confirm-title');
+    if (title && confirmDefaults) title.textContent = confirmDefaults.title;
+    const msg = document.getElementById('confirm-msg');
+    if (msg && confirmDefaults) msg.textContent = confirmDefaults.msg;
   }
 }
 
 function executeReset() {
   closeConfirm();
-  localStorage.removeItem(STORAGE_KEY);
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* storage blocked */ }
   buildState = null;
   history = [];
   showIntro();
@@ -1443,38 +1819,93 @@ function announce(message) {
 // ============================================
 // Shake to Roll (Mobile)
 // ============================================
+//
+// A More-menu toggle, shown only on touch devices with motion sensors.
+// iOS needs a permission prompt, so there it's off until the user switches
+// it on (the toggle tap is the user gesture the prompt requires). Elsewhere
+// it defaults to on.
 
-function initShakeDetection() {
-  let lastShake = 0;
-  const threshold = 15;
-  const cooldown = 1000;
+const SHAKE_THRESHOLD = 15;
+const SHAKE_COOLDOWN_MS = 1000;
+let shakeEnabled = false;
+let shakeListening = false;
+let lastShake = 0;
 
-  function handleMotion(e) {
-    const acc = e.accelerationIncludingGravity;
-    if (!acc) return;
-    const { x, y, z } = acc;
-    if (Math.abs(x) > threshold || Math.abs(y) > threshold || Math.abs(z) > threshold) {
-      const now = Date.now();
-      if (now - lastShake > cooldown) {
-        lastShake = now;
-        rollDie();
-      }
+function shakeSupported() {
+  return typeof DeviceMotionEvent !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+}
+
+function shakeNeedsPermission() {
+  return typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function';
+}
+
+function handleMotion(e) {
+  const acc = e.accelerationIncludingGravity;
+  if (!acc || anyModalOpen()) return;
+  const { x, y, z } = acc;
+  if (Math.abs(x) > SHAKE_THRESHOLD || Math.abs(y) > SHAKE_THRESHOLD || Math.abs(z) > SHAKE_THRESHOLD) {
+    const now = Date.now();
+    if (now - lastShake > SHAKE_COOLDOWN_MS) {
+      lastShake = now;
+      rollDie();
     }
   }
+}
 
-  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-    document.addEventListener('click', async function reqPerm() {
-      try {
-        const perm = await DeviceMotionEvent.requestPermission();
-        if (perm === 'granted') window.addEventListener('devicemotion', handleMotion);
-      } catch {
-        // Silently fail
-      }
-      document.removeEventListener('click', reqPerm);
-    }, { once: true });
-  } else if (typeof DeviceMotionEvent !== 'undefined') {
-    window.addEventListener('devicemotion', handleMotion);
+function setShakeListening(on) {
+  if (on && !shakeListening) window.addEventListener('devicemotion', handleMotion);
+  if (!on && shakeListening) window.removeEventListener('devicemotion', handleMotion);
+  shakeListening = on;
+}
+
+async function requestMotionPermission() {
+  if (!shakeNeedsPermission()) return true;
+  try {
+    return (await DeviceMotionEvent.requestPermission()) === 'granted';
+  } catch {
+    return false;
   }
+}
+
+function initShakeDetection() {
+  if (!shakeSupported()) return;
+  const prefs = loadPrefs();
+  shakeEnabled = typeof prefs.shake === 'boolean' ? prefs.shake : !shakeNeedsPermission();
+  updateMoreMenuState();
+  if (!shakeEnabled) return;
+  if (shakeNeedsPermission()) {
+    // Already opted in on iOS: re-confirm on the first tap of this visit
+    // (no prompt appears once access was granted).
+    document.addEventListener('click', async () => {
+      if (!shakeEnabled) return;
+      if (await requestMotionPermission()) {
+        setShakeListening(true);
+      } else {
+        shakeEnabled = false;
+        savePrefs({ ...loadPrefs(), shake: false });
+        updateMoreMenuState();
+      }
+    }, { once: true });
+  } else {
+    setShakeListening(true);
+  }
+}
+
+async function toggleShake() {
+  if (!shakeEnabled) {
+    if (!(await requestMotionPermission())) {
+      showToast('Motion access is off. Allow it in Settings to shake to roll.');
+      return;
+    }
+    shakeEnabled = true;
+    setShakeListening(true);
+    showToast('Shake your phone to roll');
+  } else {
+    shakeEnabled = false;
+    setShakeListening(false);
+  }
+  savePrefs({ ...loadPrefs(), shake: shakeEnabled });
+  updateMoreMenuState();
 }
 
 // ============================================
@@ -1482,6 +1913,13 @@ function initShakeDetection() {
 // ============================================
 
 function initKeyboard() {
+  document.getElementById('load-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      loadBuildFromInput();
+    }
+  });
+
   document.getElementById('die-container')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -1491,11 +1929,21 @@ function initKeyboard() {
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      closeShareModal();
-      closeConfirm();
-      closePinnedPanel();
-      closeShortcutsPanel();
-      closeMoreMenu();
+      // One layer at a time: the open menu, else the topmost dialog (so
+      // Escape on the pin-delete confirm returns to the pinned panel).
+      if (moreMenuOpen) {
+        closeMoreMenu();
+        return;
+      }
+      const top = modalFocusStack[modalFocusStack.length - 1];
+      if (!top) return;
+      const closers = {
+        'share-modal': closeShareModal,
+        'confirm-overlay': closeConfirm,
+        'pinned-modal': closePinnedPanel,
+        'shortcuts-modal': closeShortcutsPanel,
+      };
+      (closers[top.modalEl.id] || (() => closeModal(top.modalEl)))();
     }
   });
 }
@@ -1505,7 +1953,6 @@ function initKeyboard() {
 // ============================================
 
 // Non-destructive home: goes back to the intro without touching the saved build.
-// Phase 8 will add the resume row; for now the intro just reappears.
 function goHome() {
   closeMoreMenu();
   showIntro();
@@ -1517,6 +1964,7 @@ function goHome() {
 
 const PINS_KEY = 'pocket-dystopia-pins';
 const PIN_SLOTS = 6;
+const MAX_PIN_LABEL = 60;
 let pinnedReplaceMode = false;
 
 function loadPins() {
@@ -1525,7 +1973,18 @@ function loadPins() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.slots) && parsed.slots.length === PIN_SLOTS) {
-        return parsed;
+        // Pins are external data too — validate each one.
+        const slots = parsed.slots.map(slot => {
+          const state = slot && sanitizeBuild(slot.state);
+          if (!state) return null;
+          const label = typeof slot.label === 'string' ? slot.label.trim().slice(0, MAX_PIN_LABEL) : '';
+          return {
+            state,
+            label: label || defaultPinLabel(state),
+            createdAt: Number.isFinite(slot.createdAt) ? slot.createdAt : Date.now(),
+          };
+        });
+        return { version: 1, slots };
       }
     }
   } catch {
@@ -1535,12 +1994,35 @@ function loadPins() {
 }
 
 function savePins(pins) {
-  localStorage.setItem(PINS_KEY, JSON.stringify(pins));
+  try {
+    localStorage.setItem(PINS_KEY, JSON.stringify(pins));
+  } catch {
+    showToast("Couldn't save pins (storage is full or blocked)");
+  }
 }
 
 function defaultPinLabel(state) {
-  const text = state?.sections?.hero?.traits?.[0]?.text || 'Build';
+  const text = capitalize(state?.sections?.hero?.traits?.[0]?.text || 'Build');
   return text.length > 40 ? text.slice(0, 40) + '…' : text;
+}
+
+// Second line on a pin, so two pins with the same hero still look different.
+function pinSubtitle(state) {
+  const where = state?.sections?.setting?.where?.text || '';
+  return where.length > 48 ? where.slice(0, 48) + '…' : where;
+}
+
+// Index of the pin holding exactly this build's traits, or -1.
+function findPinnedSlot(state, pins = loadPins()) {
+  if (!state) return -1;
+  // Order-independent: a sanitized build lists its sections in a different
+  // key order than a freshly rolled one.
+  const traitKey = st => {
+    const snap = snapshotTraitTexts(st);
+    return Object.keys(snap).sort().map(k => `${k}=${snap[k]}`).join('\n');
+  };
+  const key = traitKey(state);
+  return pins.slots.findIndex(slot => slot && traitKey(slot.state) === key);
 }
 
 function relativeTime(ts) {
@@ -1573,38 +2055,65 @@ function cancelReplaceMode() {
   renderPinnedSlots();
 }
 
+// After a pin action re-renders the slots, the focused control is gone.
+// Put focus back on the same slot (first usable control), else the panel's
+// close button, so it never falls behind the overlay. Runs after
+// closeModal()'s own deferred focus restore.
+function refocusPinned(index) {
+  setTimeout(() => {
+    const modal = document.getElementById('pinned-modal');
+    if (!modal?.classList.contains('active')) return;
+    const slot = document.querySelector(`#pinned-slots > :nth-child(${index + 1})`);
+    const target = slot && (slot.matches('button:not([disabled])') ? slot : getFocusable(slot)[0]);
+    (target || modal.querySelector('.modal-header .btn-icon'))?.focus();
+  }, 20);
+}
+
 function renderPinnedSlots() {
   const container = document.getElementById('pinned-slots');
   const description = document.getElementById('pinned-description');
   const actions = document.getElementById('pinned-modal-actions');
+  const pinBtn = document.getElementById('pin-current-btn');
+  const pinLabel = document.getElementById('pin-current-label');
   if (!container || !description) return;
 
   const pins = loadPins();
   const filled = pins.slots.filter(s => s !== null);
   const allEmpty = filled.length === 0;
   const allFull = filled.length === PIN_SLOTS;
+  const pinnedAt = findPinnedSlot(buildState, pins);
 
   if (pinnedReplaceMode) {
-    description.textContent = 'All 6 slots are full. Pick one to replace.';
+    description.textContent = 'All 6 slots are full. Pick one to replace with this build.';
     if (actions) actions.hidden = false;
   } else if (allEmpty) {
-    description.textContent = 'Six slots for builds you want to keep. Tap + to pin the current one.';
+    description.textContent = 'Six slots for builds you want to keep. They stay on this device.';
     if (actions) actions.hidden = true;
   } else {
     description.textContent = '';
     if (actions) actions.hidden = true;
   }
 
-  container.innerHTML = pins.slots.map((slot, i) => renderPinSlot(slot, i, pinnedReplaceMode)).join('');
+  if (pinBtn && pinLabel) {
+    pinBtn.hidden = pinnedReplaceMode;
+    const already = pinnedAt !== -1;
+    pinBtn.disabled = !buildState || already;
+    pinLabel.textContent = already
+      ? `Pinned in slot ${pinnedAt + 1}`
+      : (allFull ? 'Pin this build (replace one)' : 'Pin this build');
+  }
+
+  container.innerHTML = pins.slots.map((slot, i) => renderPinSlot(slot, i, pinnedReplaceMode, i === pinnedAt, pinnedAt !== -1)).join('');
 }
 
-function renderPinSlot(slot, index, replaceMode) {
+function renderPinSlot(slot, index, replaceMode, isCurrent, alreadyPinned) {
   if (!slot) {
-    const disabled = !buildState;
-    const disabledClass = disabled ? ' disabled' : '';
-    const title = disabled ? 'Roll something first' : 'Pin current build';
+    const disabled = !buildState || replaceMode || alreadyPinned;
+    const title = !buildState ? 'Roll something first'
+      : alreadyPinned ? 'This build is already pinned'
+      : `Pin current build to slot ${index + 1}`;
     return `
-      <button type="button" class="pin-slot pin-slot-empty${disabledClass}"
+      <button type="button" class="pin-slot pin-slot-empty${disabled ? ' disabled' : ''}"
         onclick="pinCurrentToSlot(${index})"
         ${disabled ? 'disabled' : ''}
         aria-label="${title}"
@@ -1615,33 +2124,38 @@ function renderPinSlot(slot, index, replaceMode) {
   }
 
   const label = escapeHtml(slot.label || defaultPinLabel(slot.state));
+  const subtitle = escapeHtml(pinSubtitle(slot.state));
   const when = relativeTime(slot.createdAt);
 
   if (replaceMode) {
     return `
       <button type="button" class="pin-slot pin-slot-filled pin-slot-replace"
         onclick="replaceSlot(${index})"
-        aria-label="Replace slot ${index + 1}"
+        aria-label="Replace slot ${index + 1}: ${label}"
         title="Replace this one">
         <span class="pin-slot-label">${label}</span>
+        <span class="pin-slot-subtitle">${subtitle}</span>
         <span class="pin-slot-time">${when}</span>
-        <span class="pin-slot-replace-overlay">Replace this one</span>
+        <span class="pin-slot-replace-overlay" aria-hidden="true">Replace this one</span>
       </button>
     `;
   }
 
   return `
-    <div class="pin-slot pin-slot-filled" data-slot="${index}">
+    <div class="pin-slot pin-slot-filled${isCurrent ? ' pin-slot-current' : ''}" data-slot="${index}">
       <div class="pin-slot-body">
         <div class="pin-slot-label-row">
           <span class="pin-slot-label" data-pin-label="${index}">${label}</span>
           <input type="text" class="pin-slot-label-input" data-pin-input="${index}"
-            value="${label}" placeholder="Name this build" hidden>
+            value="${label}" placeholder="Name this build" maxlength="${MAX_PIN_LABEL}"
+            aria-label="Name for slot ${index + 1}" hidden>
         </div>
-        <span class="pin-slot-time">${when}</span>
+        <span class="pin-slot-subtitle">${subtitle}</span>
+        <span class="pin-slot-time">${isCurrent ? 'On screen now · ' : ''}${when}</span>
       </div>
       <div class="pin-slot-actions">
-        <button type="button" class="btn-secondary pin-slot-load" onclick="loadPin(${index})">
+        <button type="button" class="btn-secondary pin-slot-load" onclick="loadPin(${index})"
+          aria-label="Load slot ${index + 1}: ${label}"${isCurrent ? ' disabled' : ''}>
           <span>Load</span>
           <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
         </button>
@@ -1658,66 +2172,87 @@ function renderPinSlot(slot, index, replaceMode) {
   `;
 }
 
+function makePin(state) {
+  return {
+    state: JSON.parse(JSON.stringify(state)),
+    label: defaultPinLabel(state),
+    createdAt: Date.now(),
+  };
+}
+
 function pinCurrentToSlot(index) {
   if (!buildState) return;
   const pins = loadPins();
-  if (pins.slots[index] !== null) {
-    // Shouldn't happen (button is only rendered for empty slots) but guard anyway.
+  if (pins.slots[index] !== null) return;
+  const existing = findPinnedSlot(buildState, pins);
+  if (existing !== -1) {
+    showToast(`Already pinned in slot ${existing + 1}`);
     return;
   }
-  pins.slots = pins.slots.map((s, i) => i === index ? {
-    state: JSON.parse(JSON.stringify(buildState)),
-    label: defaultPinLabel(buildState),
-    createdAt: Date.now(),
-  } : s);
-  savePins(pins);
+  savePins({ ...pins, slots: pins.slots.map((s, i) => i === index ? makePin(buildState) : s) });
   renderPinnedSlots();
+  refocusPinned(index);
   showToast(`Pinned to slot ${index + 1}`);
+}
+
+// "Pin this build" button and the P shortcut: first free slot, or replace
+// mode when all six are full.
+function pinCurrentBuild() {
+  if (!buildState) return;
+  const pins = loadPins();
+  const existing = findPinnedSlot(buildState, pins);
+  if (existing !== -1) {
+    showToast(`Already pinned in slot ${existing + 1}`);
+    return;
+  }
+  const firstEmpty = pins.slots.findIndex(s => s === null);
+  if (firstEmpty === -1) {
+    pinnedReplaceMode = true;
+    renderPinnedSlots();
+    const modal = document.getElementById('pinned-modal');
+    if (!modal.classList.contains('active')) openModal(modal);
+    return;
+  }
+  pinCurrentToSlot(firstEmpty);
 }
 
 function replaceSlot(index) {
   if (!buildState) return;
   const pins = loadPins();
-  pins.slots = pins.slots.map((s, i) => i === index ? {
-    state: JSON.parse(JSON.stringify(buildState)),
-    label: defaultPinLabel(buildState),
-    createdAt: Date.now(),
-  } : s);
-  savePins(pins);
+  savePins({ ...pins, slots: pins.slots.map((s, i) => i === index ? makePin(buildState) : s) });
   pinnedReplaceMode = false;
   renderPinnedSlots();
+  refocusPinned(index);
   showToast(`Replaced slot ${index + 1}`);
 }
 
 function loadPin(index) {
-  const pins = loadPins();
-  const slot = pins.slots[index];
+  const slot = loadPins().slots[index];
   if (!slot) return;
-  pushHistory();
-  buildState = JSON.parse(JSON.stringify(slot.state));
-  isFirstRoll = false;
-  saveBuildState();
+  const hadBuild = Boolean(buildState);
   closePinnedPanel();
-  showResults();
-  renderCards();
-  showToast(`Loaded pin ${index + 1}`);
+  adoptLoadedBuild(JSON.parse(JSON.stringify(slot.state)));
+  showToast(hadBuild ? `Loaded slot ${index + 1}. Undo to go back.` : `Loaded slot ${index + 1}`);
 }
 
 function startRenamePin(index) {
   const labelEl = document.querySelector(`[data-pin-label="${index}"]`);
   const inputEl = document.querySelector(`[data-pin-input="${index}"]`);
   if (!labelEl || !inputEl) return;
+  const original = labelEl.textContent;
   labelEl.hidden = true;
   inputEl.hidden = false;
   inputEl.focus();
   inputEl.select();
 
   const commit = () => {
-    const newLabel = inputEl.value.trim() || defaultPinLabel(loadPins().slots[index]?.state);
     const pins = loadPins();
-    pins.slots = pins.slots.map((s, i) => i === index && s ? { ...s, label: newLabel } : s);
-    savePins(pins);
+    const slot = pins.slots[index];
+    if (!slot) return;
+    const newLabel = inputEl.value.trim().slice(0, MAX_PIN_LABEL) || defaultPinLabel(slot.state);
+    savePins({ ...pins, slots: pins.slots.map((s, i) => i === index ? { ...s, label: newLabel } : s) });
     renderPinnedSlots();
+    refocusPinned(index);
   };
 
   inputEl.addEventListener('blur', commit, { once: true });
@@ -1726,65 +2261,51 @@ function startRenamePin(index) {
       e.preventDefault();
       inputEl.blur();
     } else if (e.key === 'Escape') {
+      // Cancel the rename only — don't let Escape close the whole panel.
       e.preventDefault();
-      inputEl.value = labelEl.textContent;
+      e.stopPropagation();
+      inputEl.value = original;
       inputEl.blur();
     }
   });
 }
 
 let pendingDeleteIndex = null;
+// The reset dialog's own wording, read from index.html once so pin-delete
+// mode can borrow the dialog and hand it back unchanged.
+let confirmDefaults = null;
 
 function confirmDeletePin(index) {
+  if (!confirmDefaults) {
+    confirmDefaults = {
+      title: document.getElementById('confirm-title')?.textContent || '',
+      msg: document.getElementById('confirm-msg')?.textContent || '',
+    };
+  }
   pendingDeleteIndex = index;
   const overlay = document.getElementById('confirm-overlay');
+  const title = document.getElementById('confirm-title');
   const msg = document.getElementById('confirm-msg');
   const yes = document.getElementById('confirm-yes');
+  if (title) title.textContent = `Delete slot ${index + 1}?`;
   if (msg) msg.textContent = "This slot will be empty again. Your other pins and your current build aren't affected.";
   if (yes) {
     yes.textContent = 'Delete';
     yes.onclick = executePinDelete;
   }
-  overlay.classList.add('active');
   overlay.dataset.mode = 'pin-delete';
+  openModal(overlay);
 }
 
 function executePinDelete() {
   if (pendingDeleteIndex === null) return;
   const pins = loadPins();
-  pins.slots = pins.slots.map((s, i) => i === pendingDeleteIndex ? null : s);
-  savePins(pins);
-  pendingDeleteIndex = null;
-  // Restore the confirm dialog to its default (reset) wiring.
-  const yes = document.getElementById('confirm-yes');
-  if (yes) {
-    yes.textContent = 'Clear it';
-    yes.onclick = executeReset;
-  }
+  const index = pendingDeleteIndex;
+  savePins({ ...pins, slots: pins.slots.map((s, i) => i === index ? null : s) });
   closeConfirm();
   renderPinnedSlots();
-  showToast('Unpinned');
-}
-
-// Invoked from the top-bar Pin button AND from the P keyboard shortcut.
-// `mode === 'pin'` triggers the pin-current flow.
-function openPinnedPanelForPinning() {
-  if (!buildState) {
-    // No current build to pin — fall through to the view mode so the user
-    // can still browse existing pins (all will be empty on fresh install).
-    openPinnedPanel();
-    return;
-  }
-  const pins = loadPins();
-  const firstEmpty = pins.slots.findIndex(s => s === null);
-  if (firstEmpty === -1) {
-    pinnedReplaceMode = true;
-    renderPinnedSlots();
-    openModal(document.getElementById('pinned-modal'));
-    showToast('All 6 slots are full. Pick one to replace.');
-  } else {
-    openPinnedPanel();
-  }
+  refocusPinned(index);
+  showToast(`Slot ${index + 1} is empty again`);
 }
 
 // ============================================
@@ -1831,6 +2352,10 @@ function handleMenuAction(action) {
     case 'lefthanded':
       toggleLeftHanded();
       // Keep the menu open so the user can see the checked state flip.
+      return;
+    case 'shake':
+      // Stays open so the checkmark flip is visible (like left-handed).
+      toggleShake();
       return;
     case 'shortcuts':
       closeMoreMenu();
@@ -1985,7 +2510,7 @@ function initShortcuts() {
         return;
       case 'p': case 'P':
         e.preventDefault();
-        openPinnedPanelForPinning();
+        pinCurrentBuild();
         return;
       case 'l': case 'L':
         e.preventDefault();
@@ -1993,9 +2518,8 @@ function initShortcuts() {
         return;
       case '1': case '2': case '3': case '4': case '5': {
         e.preventDefault();
-        const keys = ['hero', 'villain', 'squad', 'setting', 'obstacles'];
-        const idx = Number(key) - 1;
-        if (keys[idx]) rerollSection(keys[idx]);
+        const sectionKey = SECTION_KEYS[Number(key) - 1];
+        if (sectionKey) rerollSection(sectionKey);
         return;
       }
     }
@@ -2081,13 +2605,20 @@ function init() {
   initShakeDetection();
   startRollIconCycle();
 
+  // Crossing the collapse breakpoint (rotating a tablet, resizing a window)
+  // changes whether cards may be collapsed — re-render to match.
+  window.matchMedia(COLLAPSE_MQ).addEventListener?.('change', () => renderCards());
+
   // Priority: URL hash share > saved state > fresh intro.
   // Hash-loads skip the CRT boot animation because it isn't a "roll".
+  // The saved build is restored first so that opening a shared link on top
+  // of it stays undoable.
+  const saved = loadSavedState();
+  if (saved) buildState = saved;
+
   if (tryLoadFromHash()) return;
 
-  const saved = loadSavedState();
   if (saved) {
-    buildState = saved;
     isFirstRoll = false;
     showResults();
     renderCards();

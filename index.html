@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark" data-left-handed="false">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Pocket Dystopia</title>
   <meta name="description" content="Roll a satirical dystopian story seed. Lock traits, re-roll sections, share your build.">
   <meta name="theme-color" content="#080A0D">
@@ -14,6 +14,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
 
   <!-- Open Graph -->
   <meta property="og:title" content="Pocket Dystopia">
@@ -28,11 +29,9 @@
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 
-  <!-- Material Symbols Outlined -->
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
-
-  <!-- html2canvas -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+  <!-- Material Symbols Outlined — subset to the icons the app uses (≈5 KB instead of ≈4 MB).
+       icon_names must stay alphabetical; add a name here before using a new icon. -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0..1,0&icon_names=add,arrow_forward,back_hand,casino,check,chevron_right,close,content_copy,dark_mode,delete,download,edit,expand_more,keyboard,light_mode,link,lock,lock_open,more_vert,push_pin,replay,share,tune,undo,upload,vibration&display=block" rel="stylesheet">
 
   <!-- App -->
   <link rel="stylesheet" href="styles.css">
@@ -75,7 +74,7 @@
       </button>
       <div id="intro-load-body" class="intro-load-body" hidden>
         <label for="load-input" class="sr-only">Build code</label>
-        <input type="text" id="load-input" placeholder="Paste a build code..." autocomplete="off" spellcheck="false">
+        <input type="text" id="load-input" placeholder="Paste a link or code…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
         <button class="btn-secondary" id="load-btn" onclick="loadBuildFromInput()">
           <span class="material-symbols-outlined" aria-hidden="true">upload</span>
           Load
@@ -87,18 +86,15 @@
   </div>
 
   <!-- ===== RESULTS SCREEN ===== -->
-  <div id="results-screen" class="results-screen" aria-live="polite">
+  <div id="results-screen" class="results-screen">
     <header class="top-bar app-container">
       <div class="top-bar-left">
-        <button class="top-bar-title" type="button" onclick="goHome()" aria-label="Back to start">POCKET DYSTOPIA</button>
+        <button class="top-bar-title" type="button" onclick="goHome()" aria-label="Pocket Dystopia, back to start" title="Back to start">POCKET DYSTOPIA</button>
       </div>
       <div class="top-bar-right">
-        <button class="btn-icon btn-home-mobile" id="btn-home" onclick="goHome()" aria-label="Back to start" title="Back to start">
-          <span class="material-symbols-outlined" aria-hidden="true">home</span>
-        </button>
         <button class="btn-icon btn-undo" id="btn-undo" onclick="undo()" aria-label="Undo last roll" title="Undo last roll" disabled>
           <span class="material-symbols-outlined" aria-hidden="true">undo</span>
-          <span class="btn-undo-label" aria-hidden="true">Undo roll</span>
+          <span class="btn-undo-label" aria-hidden="true">Undo</span>
         </button>
         <button class="btn-icon" id="btn-share" onclick="openShareModal()" aria-label="Share this build" title="Share this build">
           <span class="material-symbols-outlined" aria-hidden="true">share</span>
@@ -123,7 +119,13 @@
               <span class="more-menu-label">Left-handed layout</span>
               <span class="material-symbols-outlined more-menu-check" aria-hidden="true">check</span>
             </button>
-            <button class="more-menu-item" role="menuitem" type="button" onclick="handleMenuAction('shortcuts')">
+            <button class="more-menu-item more-menu-shake" role="menuitemcheckbox" type="button"
+              onclick="handleMenuAction('shake')" aria-checked="false" hidden>
+              <span class="material-symbols-outlined" aria-hidden="true">vibration</span>
+              <span class="more-menu-label">Shake to roll</span>
+              <span class="material-symbols-outlined more-menu-check" aria-hidden="true">check</span>
+            </button>
+            <button class="more-menu-item more-menu-shortcuts" role="menuitem" type="button" onclick="handleMenuAction('shortcuts')">
               <span class="material-symbols-outlined" aria-hidden="true">keyboard</span>
               <span class="more-menu-label">Keyboard shortcuts</span>
             </button>
@@ -134,9 +136,9 @@
             </button>
           </div>
         </div>
-        <button class="btn-primary" id="btn-roll-all" onclick="rollDie()" aria-label="Roll all" title="Roll all">
-          <span class="roll-die-icon" id="roll-die-icon" aria-hidden="true"></span>
-          <span class="sr-only">Roll</span>
+        <button class="btn-primary btn-roll" id="btn-roll-all" onclick="rollDie()" title="Roll everything that isn't locked (R)">
+          <span class="roll-die-icon" aria-hidden="true"></span>
+          <span class="btn-roll-label">Roll</span>
         </button>
       </div>
     </header>
@@ -199,7 +201,25 @@
       </div>
     </main>
 
+    <!-- Phone-only thumb-zone action bar (≤600px). Mirrors in left-handed mode. -->
+    <div class="action-bar" id="action-bar">
+      <button class="btn-secondary action-undo" id="btn-undo-bar" type="button" onclick="undo()" disabled>
+        <span class="material-symbols-outlined" aria-hidden="true">undo</span>
+        Undo
+      </button>
+      <button class="btn-primary action-roll" type="button" onclick="rollDie()">
+        <span class="roll-die-icon" aria-hidden="true"></span>
+        Roll
+      </button>
+    </div>
+
   </div>
+
+  <footer class="forhuman-credit">
+    designed with ❤ for
+    <a href="https://forhuman.ca" target="_blank" rel="noopener">Human,</a>
+    by <a href="https://nicojan.com" target="_blank" rel="noopener">Nico Jan</a>
+  </footer>
 
   <!-- ===== SHARE MODAL (export hub) ===== -->
   <div id="share-modal" class="modal-overlay" role="dialog" aria-labelledby="modal-title" aria-modal="true">
@@ -210,7 +230,7 @@
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
-      <p class="text-caption share-description">Send a link or a code. Either one restores the build exactly.</p>
+      <p class="text-caption share-description">Send a link or a code. Either one brings back this exact build, locks included.</p>
 
       <div class="share-actions">
         <button class="btn-secondary share-action-btn" id="share-web-share" onclick="shareViaWebShareApi()" hidden>
@@ -239,9 +259,8 @@
       </button>
 
       <div id="share-code-block" class="share-code-block" hidden>
-        <!-- The code is base64 noise — read-only, not meant to be read aloud.
-             Screen-reader users should use the Copy code button instead. -->
-        <textarea id="share-code" readonly aria-label="Build code (copy with the Copy code button)" tabindex="-1"></textarea>
+        <label for="share-code" class="sr-only">Build code</label>
+        <input type="text" id="share-code" class="share-code-input" readonly spellcheck="false" onfocus="this.select()">
         <button class="btn-secondary share-action-btn" onclick="copyShareCode(event)">
           <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
           Copy code
@@ -268,7 +287,7 @@
         <div class="shortcut-row"><dt><kbd>S</kbd></dt><dd>Share</dd></div>
         <div class="shortcut-row"><dt><kbd>P</kbd></dt><dd>Pin current build</dd></div>
         <div class="shortcut-row"><dt><kbd>L</kbd></dt><dd>Toggle light / dark</dd></div>
-        <div class="shortcut-row"><dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Re-roll card 1 through 5</dd></div>
+        <div class="shortcut-row"><dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Re-roll one card, top to bottom</dd></div>
         <div class="shortcut-row"><dt><kbd>?</kbd></dt><dd>Show this panel</dd></div>
         <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Close any open panel</dd></div>
       </dl>
@@ -289,6 +308,12 @@
         </button>
       </div>
       <p id="pinned-description" class="text-caption share-description"></p>
+      <div class="pinned-toolbar">
+        <button type="button" class="btn-primary" id="pin-current-btn" onclick="pinCurrentBuild()">
+          <span class="material-symbols-outlined" aria-hidden="true">push_pin</span>
+          <span id="pin-current-label">Pin this build</span>
+        </button>
+      </div>
       <div id="pinned-slots" class="pinned-slots"></div>
       <div class="modal-actions" id="pinned-modal-actions" hidden>
         <button class="btn-secondary" onclick="cancelReplaceMode()">Cancel</button>
@@ -316,11 +341,5 @@
 
   <script src="data.js"></script>
   <script src="app.js"></script>
-
-  <p class="forhuman-credit">
-    designed with ❤ for
-    <a href="https://forhuman.ca" target="_blank" rel="noopener">Human,</a>
-    by <a href="https://nicojan.com" target="_blank" rel="noopener">Nico Jan</a>
-  </p>
 </body>
 </html>

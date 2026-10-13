@@ -292,7 +292,7 @@ body::before {
 .app-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 var(--space-lg);
+  padding: 0 max(var(--space-lg), env(safe-area-inset-right)) 0 max(var(--space-lg), env(safe-area-inset-left));
 }
 
 @media (min-width: 600px) {
@@ -313,7 +313,9 @@ body::before {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  /* Leaves room for the credit footer, which sits in the flow below. */
+  min-height: calc(100vh - 3rem);
+  min-height: calc(100svh - 3rem);
   text-align: center;
   gap: var(--space-2xl);
   padding: var(--space-3xl) var(--space-lg);
@@ -654,6 +656,11 @@ body::before {
 
 .btn-primary .roll-die-icon { color: var(--text-inverse); }
 
+.btn-roll {
+  padding: var(--space-sm) var(--space-lg);
+  margin-left: var(--space-xs);
+}
+
 .top-bar-right {
   display: flex;
   align-items: center;
@@ -667,25 +674,10 @@ body::before {
 }
 
 /* Left-handed mode.
-   CSS row-reverse mirrors the visual layout without duplicating the DOM.
-   Accessibility trade-off (WCAG 1.3.2 Meaningful Sequence): keyboard tab
-   order follows the DOM, so it reverses visually in this mode. We accept
-   this because the preference itself is about thumb reach — tab-proximate
-   items landing under the thumb-proximate side is arguably *desirable* for
-   the specific users who enable this mode (they explicitly want those
-   buttons first). Documented here so a future reviewer doesn't "fix" it. */
-[data-left-handed="true"] .top-bar {
-  flex-direction: row-reverse;
-}
-
-[data-left-handed="true"] .top-bar-left {
-  flex-direction: row-reverse;
-}
-
-[data-left-handed="true"] .top-bar-right {
-  flex-direction: row-reverse;
-}
-
+   Mirrors what the thumb reaches: the phone action bar (Roll on the left),
+   card-header actions and per-trait actions. The top bar deliberately does
+   NOT mirror — the top of a phone is out of thumb reach in either hand, and
+   reversing it only scrambled its reading and tab order. */
 [data-left-handed="true"] .card-header {
   flex-direction: row-reverse;
 }
@@ -984,20 +976,23 @@ body::before {
   padding: var(--space-lg) 0 var(--space-3xl);
 }
 
+/* Desktop: Setting spans the top as the "scene", then Hero | Villain and
+   Squad | Obstacles — five cards, no empty cell. */
 @media (min-width: 1024px) {
   .cards-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto;
-    gap: var(--space-lg);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
   }
 
-  .cards-grid .card:nth-child(n+3) {
-    /* Squad, Setting, Obstacles span bottom row */
+  .card-setting {
+    grid-column: 1 / -1;
   }
 
-  .cards-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .card-setting .card-body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-xl);
   }
 }
 
@@ -1145,7 +1140,7 @@ body::before {
   transform: rotate(180deg);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1023.98px) {
   .card-chevron {
     display: inline-flex;
   }
@@ -1174,15 +1169,22 @@ body::before {
   font-size: 18px;
 }
 
+/* Collapse animates grid rows 0fr → 1fr, so there's no max-height cap to
+   clip long cards on narrow screens. */
 .card-content {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.35s ease, opacity 0.25s ease;
+  display: grid;
+  grid-template-rows: 0fr;
   opacity: 0;
+  transition: grid-template-rows 0.3s ease, opacity 0.25s ease;
+}
+
+.card-content-inner {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .card.expanded .card-content {
-  max-height: 500px;
+  grid-template-rows: 1fr;
   opacity: 1;
 }
 
@@ -1200,6 +1202,11 @@ body::before {
 
 .card:not(.expanded) .card-summary {
   display: block;
+}
+
+.card-summary-more {
+  color: var(--text-tertiary);
+  white-space: nowrap;
 }
 
 /* --- Trait Lines --- */
@@ -1270,10 +1277,9 @@ body::before {
 
 .trait-lock,
 .trait-swap {
-  opacity: 0.2;
+  color: var(--text-tertiary);
   transition: opacity 0.2s ease, color 0.2s ease;
   flex-shrink: 0;
-  /* 28×28 visible target, 36×36 hit area via padding */
   min-width: 36px;
   min-height: 36px;
   width: 36px;
@@ -1284,29 +1290,45 @@ body::before {
 
 .trait-lock .material-symbols-outlined,
 .trait-swap .material-symbols-outlined {
-  font-size: 16px;
+  font-size: 18px;
 }
 
-.trait-line:hover .trait-lock,
-.trait-line:hover .trait-swap,
-.trait-lock:focus-visible,
-.trait-swap:focus-visible {
-  opacity: 0.7;
+/* Pointer devices: quiet at rest, full on row hover or focus. Touch devices
+   have no hover, so there they stay fully visible (the rule above). */
+@media (hover: hover) and (pointer: fine) {
+  .trait-lock,
+  .trait-swap {
+    opacity: 0.45;
+  }
+
+  .trait-line:hover .trait-lock,
+  .trait-line:hover .trait-swap,
+  .trait-line:focus-within .trait-lock,
+  .trait-line:focus-within .trait-swap {
+    opacity: 1;
+  }
 }
 
-/* Locked trait: lock is full opacity red, swap dims out further */
+/* Locked trait: amber lock at full strength, swap greyed out. */
 .trait-line.trait-locked .trait-lock {
   opacity: 1;
 }
 
-.trait-line.trait-locked .trait-swap,
-.trait-swap:disabled {
-  opacity: 0.12;
+.trait-swap:disabled,
+.trait-line.trait-locked:hover .trait-swap {
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
-.trait-line.trait-locked:hover .trait-swap {
-  opacity: 0.18;
+/* Inside a locked card the trait locks are held by the card. */
+.trait-lock:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.btn-icon.trait-lock:disabled:hover,
+.btn-icon.trait-swap:disabled:hover {
+  background: none;
 }
 
 .lock-icon,
@@ -1362,8 +1384,17 @@ body::before {
   color: var(--text-primary);
 }
 
-.modal textarea#share-code {
-  margin-bottom: 0;
+.share-code-input {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font: 400 1rem/1.4 var(--font-body);
+  letter-spacing: 0.5px;
+  text-overflow: ellipsis;
 }
 
 .modal textarea {
@@ -1450,36 +1481,36 @@ body::before {
   display: none !important;
 }
 
-/* --- Undo button label --- */
+/* --- Undo button label ---
+   Floats under the button the first time undo becomes available, and on
+   keyboard focus. Absolutely positioned so nothing in the top bar moves. */
 .btn-undo {
-  gap: var(--space-xs);
+  position: relative;
 }
 
 .btn-undo-label {
-  font: 700 0.8125rem/1 var(--font-body);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  padding: 3px 8px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font: 700 0.75rem/1.2 var(--font-body);
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--text-primary);
-  max-width: 0;
-  opacity: 0;
-  overflow: hidden;
   white-space: nowrap;
-  transition: max-width 250ms ease, opacity 250ms ease;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease, transform 200ms ease;
 }
 
-.btn-undo.btn-undo-label-visible .btn-undo-label,
-.btn-undo:hover:not(:disabled) .btn-undo-label,
+.btn-undo.btn-undo-label-visible:not(:disabled) .btn-undo-label,
 .btn-undo:focus-visible:not(:disabled) .btn-undo-label {
-  max-width: 80px;
   opacity: 1;
-}
-
-/* On very tight mobile viewports, collapse the inline label entirely —
-   the 1.5s flash still runs, just without room to expand the text. */
-@media (max-width: 480px) {
-  .btn-undo.btn-undo-label-visible .btn-undo-label {
-    max-width: 64px;
-  }
+  transform: translateX(-50%) translateY(0);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1538,16 +1569,52 @@ kbd {
 }
 
 /* --- Pinned Builds Panel --- */
+.pinned-toolbar {
+  display: flex;
+  margin-bottom: var(--space-lg);
+}
+
+.pinned-toolbar [hidden] {
+  display: none !important;
+}
+
+.pinned-toolbar .btn-primary:disabled {
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+.pinned-toolbar .btn-primary:disabled:active {
+  transform: none;
+}
+
 .pinned-slots {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-md);
   margin-bottom: var(--space-md);
 }
 
 @media (min-width: 600px) {
   .pinned-slots {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Phones: one column, so a filled pin has room for Load, rename and delete;
+   empty slots shrink to a slim dashed row. */
+@media (max-width: 480px) {
+  .pinned-slots {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-sm);
+  }
+
+  .pin-slot {
+    min-height: 0 !important;
+  }
+
+  .pin-slot-empty {
+    min-height: 52px !important;
   }
 }
 
@@ -1629,9 +1696,25 @@ kbd {
   font: 400 0.875rem/1.35 var(--font-body);
 }
 
+.pin-slot-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
 .pin-slot-time {
   color: var(--text-tertiary);
   font-size: 0.75rem;
+}
+
+.pin-slot-current {
+  border-color: var(--accent-cyan);
+}
+
+.pin-slot-load:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .pin-slot-actions {
@@ -1698,11 +1781,15 @@ kbd {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   padding: var(--space-md) var(--space-xl);
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--space-lg));
+  text-align: center;
   color: var(--text-primary);
   font: 400 0.875rem/1.4 var(--font-body);
-  z-index: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 800;
   pointer-events: none;
-  transition: all 0.3s ease;
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 .toast.visible {
@@ -1847,11 +1934,6 @@ kbd {
   }
 }
 
-/* Home button only visible on mobile (where the logo is hidden) */
-.btn-home-mobile {
-  display: none;
-}
-
 /* --- More overflow menu --- */
 .more-menu-wrapper {
   position: relative;
@@ -1878,19 +1960,10 @@ kbd {
   display: none;
 }
 
-/* Near the right viewport edge on mobile, flip to the left */
-@media (max-width: 480px) {
-  .more-menu {
-    right: auto;
-    left: 0;
-  }
-}
-
-/* In left-handed mode the More button ends up on the left of the top bar,
-   so anchor the popover to the left edge instead. */
-[data-left-handed="true"] .more-menu {
-  right: auto;
-  left: 0;
+/* The More button sits at the right of the top bar on every width, so the
+   menu always opens leftwards from its right edge. */
+.more-menu {
+  max-width: calc(100vw - 2 * var(--space-lg));
 }
 
 .more-menu-item {
@@ -1909,6 +1982,11 @@ kbd {
   border-radius: var(--radius-sm);
   transition: background 0.15s ease, color 0.15s ease;
   width: 100%;
+}
+
+/* display:flex above would otherwise beat the [hidden] attribute. */
+.more-menu-item[hidden] {
+  display: none;
 }
 
 .more-menu-item:hover,
@@ -1976,29 +2054,27 @@ kbd {
 }
 
 @media (max-width: 600px) {
-  .top-bar-left {
-    display: none;
+  /* Phone top bar: title (doubles as home) + share, pin, more. Roll and
+     Undo move to the thumb-zone action bar at the bottom. */
+  .top-bar-title {
+    font-size: 0.875rem;
+    letter-spacing: 1.5px;
+    padding-inline: 0;
+    white-space: nowrap;
   }
 
-  .btn-home-mobile {
-    display: inline-flex;
+  .modal,
+  .confirm-dialog {
+    padding: var(--space-xl) var(--space-lg);
   }
 
-  /* Let the nav span the full width so the die can push to the opposite edge */
-  .top-bar-right {
+  .pinned-toolbar .btn-primary {
     flex: 1;
   }
 
-  /* Right-handed: die sticks to the right, rest of the nav on the left */
-  #btn-roll-all {
-    margin-left: auto;
-  }
-
-  /* Left-handed: container is row-reverse, so invert the auto-margin
-     to push the die to the visual left instead. */
-  [data-left-handed="true"] #btn-roll-all {
-    margin-left: 0;
-    margin-right: auto;
+  .top-bar #btn-undo,
+  .top-bar #btn-roll-all {
+    display: none;
   }
 
   .text-display {
@@ -2006,54 +2082,183 @@ kbd {
   }
 
   .card-header {
-    padding: var(--space-md);
-    flex-wrap: wrap;
-    row-gap: var(--space-xs);
+    padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-md);
+  }
+
+  [data-left-handed="true"] .card-header {
+    padding: var(--space-sm) var(--space-md) var(--space-sm) var(--space-sm);
   }
 
   .card-body {
+    padding: 0 var(--space-sm) var(--space-md) var(--space-md);
+  }
+
+  [data-left-handed="true"] .card-body {
+    padding: 0 var(--space-md) var(--space-md) var(--space-sm);
+  }
+
+  .card-summary {
     padding: 0 var(--space-md) var(--space-md);
+  }
+
+  /* One step down from 17px buys the trait text a usable column next to
+     the two 44px action buttons. */
+  .trait-text {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  .trait-prefix,
+  .trait-label {
+    line-height: 1.5rem;
+  }
+
+  .logline-box {
+    padding: var(--space-md);
+  }
+
+  .cards-grid {
+    padding-bottom: var(--space-xl);
+  }
+}
+
+/* --- Phone action bar (thumb zone) --- */
+.action-bar {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .action-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 120;
+    display: flex;
+    gap: var(--space-sm);
+    padding: var(--space-sm) max(var(--space-lg), env(safe-area-inset-right))
+      calc(var(--space-sm) + env(safe-area-inset-bottom)) max(var(--space-lg), env(safe-area-inset-left));
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  [data-left-handed="true"] .action-bar {
+    flex-direction: row-reverse;
+  }
+
+  .action-roll {
+    flex: 1;
+    min-height: 52px;
+    font-size: 1.125rem;
+  }
+
+  .action-roll .roll-die-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .action-undo {
+    min-height: 52px;
+    padding: var(--space-sm) var(--space-lg);
+    gap: var(--space-xs);
+  }
+
+  .action-undo:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* Room for the bar under the last card, the footer and the toast. */
+  .results-screen.active ~ .forhuman-credit {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  .results-screen.active ~ .toast,
+  body:has(.results-screen.active) .toast {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+}
+
+/* --- Touch targets: 44pt on coarse pointers (HIG) --- */
+@media (pointer: coarse) {
+  .top-bar-title {
+    min-height: 44px;
+  }
+
+  .top-bar-right .btn-icon,
+  .card-header-actions .btn-icon {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .trait-lock,
+  .trait-swap {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .trait-actions {
+    gap: 0;
+  }
+
+  .more-menu-item,
+  .mood-option {
+    min-height: 44px;
+  }
+
+  /* Align the first text line with the centre of the 44px buttons. */
+  .trait-line {
+    align-items: flex-start;
+  }
+
+  .trait-prefix,
+  .trait-label,
+  .trait-text {
+    padding-top: 10px;
+  }
+
+  .view-toggle button,
+  .logline-copy-btn,
+  .intro-load input,
+  .intro-load #load-btn,
+  .intro-resume-actions .btn-primary,
+  .intro-resume-actions .btn-secondary,
+  .pin-slot-load,
+  .pin-slot-actions .btn-icon {
+    min-height: 44px;
+  }
+
+  .pin-slot-actions .btn-icon {
+    min-width: 44px;
   }
 }
 
 @media (max-width: 359px) {
+  .top-bar-title {
+    font-size: 0.8125rem;
+    letter-spacing: 1px;
+  }
+
   .card-header-title {
     letter-spacing: 1px;
     font-size: 0.9375rem;
   }
-
-  .card-header-actions .btn-icon {
-    min-width: 32px;
-    min-height: 32px;
-  }
 }
 
-@media (min-width: 600px) and (max-width: 1024px) {
-  .cards-grid {
-    max-width: 700px;
-    margin: 0 auto;
-  }
-}
-
-/* Non-mobile: cards are always expanded; header title is not a disclosure */
-@media (min-width: 768px) {
+/* Wide layouts: cards are always expanded and the view toggle is hidden.
+   Below 1024px the toggle and per-card chevrons work (incl. tablets). */
+@media (min-width: 1024px) {
   .card .card-content {
-    max-height: none;
+    grid-template-rows: 1fr;
     opacity: 1;
-    overflow: visible;
   }
 
   .card .card-summary {
     display: none !important;
   }
-}
 
-@media (min-width: 1024px) {
-  .cards-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  /* Desktop: hide controls that only make sense on mobile/cramped screens */
   .view-toggle {
     display: none !important;
   }
@@ -2145,17 +2350,19 @@ kbd {
   justify-content: center;
 }
 
+/* In the document flow (never fixed), so it can't sit on top of content. */
 .forhuman-credit {
-  position: fixed;
-  z-index: 1;
-  bottom: 0.75rem;
-  left: 0;
-  right: 0;
+  min-height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0 0.35em;
   text-align: center;
   font-size: 0.75rem;
-  opacity: 0.5;
+  color: var(--text-tertiary);
   margin: 0;
-  padding: 0 1rem;
+  padding: var(--space-sm) var(--space-lg) var(--space-lg);
 }
 .forhuman-credit a {
   color: inherit;
