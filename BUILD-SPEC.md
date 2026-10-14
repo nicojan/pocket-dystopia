@@ -17,7 +17,7 @@
 | Sharing | URL hash (`#b=...`, a ~28-character index-packed code) or the bare code, with Web Share API on supported devices. Legacy `#build=...` links still load |
 | Offline support | No service worker. Works offline only from the browser cache; fonts and icons come from the CDN and may fall back |
 | Installable | `manifest.webmanifest` (standalone display, 192/512 icons) |
-| Deployment | Cloudflare Workers static assets at `pocketdystopia.forhuman.ca` (see `wrangler.toml`: no Worker script, the repo root is served as-is) |
+| Deployment | Cloudflare Workers static assets at `pocketdystopia.forhuman.ca` (see `wrangler.toml`: no Worker script, the repo root is served as-is minus `.assetsignore`). **A push to `main` deploys** via Cloudflare Workers Builds (the GitHub check "Workers Builds: pocket-dystopia"); no local `wrangler` login is needed. The e2e suite runs as a separate check and does not gate the deploy |
 
 ### File layout
 
@@ -637,7 +637,7 @@ Implemented via `modalFocusStack`, `openModal()`, `closeModal()`, `trapTab()`, `
 
 ### 9.6 Contrast
 
-All text tokens meet WCAG AA against their paired bg in both themes (`--text-tertiary` bumped in the revision 1 audit from `#4A5568` to `#737B85` to pass). Villain red, amber lock, hero green, and secondary grey verified at 4.5:1+ against card bg. Lighthouse accessibility score: **100/100** on both desktop and mobile.
+All text tokens meet WCAG AA against their paired bg in both themes (`--text-tertiary` bumped in the revision 1 audit from `#4A5568` to `#737B85` to pass). Villain red, amber lock, hero green, and secondary grey verified at 4.5:1+ against card bg. Lighthouse accessibility score: **100/100** on both desktop and mobile (measured in revision 1, not re-run since).
 
 ### 9.7 Keyboard shortcuts
 
@@ -802,7 +802,11 @@ Smoke path to verify the build end-to-end:
 19. Toggle theme via More menu → palette swaps including all role colors. Reload → theme persists.
 20. At ≤ 600 px → bottom bar with Undo and Roll, top bar shows title + share/pin/more, toast and footer clear of the bar. Toggle left-handed → bar mirrors (Roll on the left), card-header and trait buttons move left, top bar stays in the same order.
 21. Switch Shake to roll on in the More menu on a phone (grant motion permission on iOS when prompted) and shake → triggers a roll. Switch off → no longer rolls.
-22. Reload the page after any of the above → state restores exactly.
+22. Press `F` → present view goes fullscreen and fits the screen; `R`/Space/PageDown roll, `Z`/PageUp undo, `2` re-rolls the Hero, `S`/`P`/`?` do nothing; locked cards show an amber lock. Esc (or `F`) exits and focus returns.
+23. More → Print worksheet → print preview shows only the worksheet (build, Name/Date, six prompts with ruled lines, share URL), black on white. Cmd+P from the intro prints the page itself.
+24. Reload the page after any of the above → state restores exactly.
+
+**Verification status (2026-10-13).** Steps 1–20 and 22–24 were exercised in automated Chrome (desktop, 820 px touch tablet, 390 and 320 px touch phones) and by the e2e suite, against both the local server and production. The phone-only behaviours that need real hardware — iOS motion permission and shake (21), the image share sheet into Photos (13), the action bar clearing the iPhone home indicator (20), and links opened from iMessage/WeChat — were not tested on a device; the operator accepted them as working at close of the revision 2 session. Present view on a real projector and the worksheet on a real printer remain an open operator check in `_meta`.
 
 ### Accessibility check
 
