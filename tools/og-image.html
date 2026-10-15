@@ -1,57 +1,42 @@
 <!DOCTYPE html>
-<!-- Source for og-image-v3.png (1200×630). Regenerate: node tools/render-og.mjs og-image-vN.png (new N) -->
+<!-- Source for og-image-v4.png (1200×630). Regenerate: node tools/render-og.mjs og-image-vN.png (new N) -->
 <html>
 <head>
 <meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Space+Mono:wght@400;700&display=block" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;700&family=Atkinson+Hyperlegible+Next:wght@400;500;700&display=block" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 1200px; height: 630px; }
   body {
-    background: #080A0D;
-    color: #E6EDF3;
-    font-family: 'Space Mono', monospace;
+    background: #0F0E0C;
+    color: #EEE8DD;
+    font-family: 'Atkinson Hyperlegible Next', sans-serif;
     display: flex;
     align-items: center;
     gap: 72px;
     padding: 0 88px;
-    position: relative;
-    overflow: hidden;
   }
-  body::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(rgba(255,255,255,0) 50%, rgba(255,255,255,0.025) 50%);
-    background-size: 100% 4px;
-    pointer-events: none;
-  }
-  .die { width: 260px; height: 260px; flex-shrink: 0; filter: drop-shadow(0 0 28px rgba(0,229,255,0.45)); }
+  .die { width: 240px; height: 240px; flex-shrink: 0; filter: drop-shadow(0 0 24px rgba(255,178,36,0.28)); }
   .copy { display: flex; flex-direction: column; gap: 22px; }
-  h1 { font: 700 68px/1 'Space Grotesk', sans-serif; letter-spacing: 4px; text-shadow: 0 0 30px rgba(0,229,255,0.25); }
-  .pitch { font-size: 26px; line-height: 1.4; color: #8B949E; }
-  .seed {
-    font-size: 21px;
-    line-height: 1.45;
-    padding-left: 18px;
-    border-left: 3px solid rgba(0,229,255,0.6);
-    max-width: 640px;
-  }
-  .seed .hero { color: #4ADE80; }
-  .seed .villain { color: #FF4D4D; }
-  .url { font-size: 18px; color: #737B85; letter-spacing: 1px; }
+  h1 { font: 700 64px/1 'Atkinson Hyperlegible Mono', monospace; }
+  .cursor { display: inline-block; width: 0.55em; height: 0.9em; margin-left: 0.08em; background: #FFB224; vertical-align: -0.08em; }
+  .pitch { font-size: 27px; line-height: 1.4; color: #ABA396; }
+  .seed { font-size: 24px; font-weight: 500; line-height: 1.42; max-width: 660px; }
+  .seed .hero { color: #7FD48B; }
+  .seed .villain { color: #FF7B67; }
+  .url { font: 400 19px 'Atkinson Hyperlegible Mono', monospace; color: #968E81; }
 </style>
 </head>
 <body>
   <svg class="die" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="8" y="8" width="104" height="104" rx="18" stroke="#00E5FF" stroke-width="2.5" fill="#161B22"/>
-    <rect x="8" y="8" width="104" height="104" rx="18" stroke="#00E5FF" stroke-width="1" fill="none" opacity="0.35" stroke-dasharray="4 4"/>
-    <circle cx="30" cy="30" r="9" fill="#00E5FF"/><circle cx="90" cy="30" r="9" fill="#00E5FF"/>
-    <circle cx="60" cy="60" r="9" fill="#00E5FF"/>
-    <circle cx="30" cy="90" r="9" fill="#00E5FF"/><circle cx="90" cy="90" r="9" fill="#00E5FF"/>
+    <rect x="8" y="8" width="104" height="104" rx="18" stroke="#FFB224" stroke-width="2.5" fill="#1E1C18"/>
+    <rect x="8" y="8" width="104" height="104" rx="18" stroke="#FFB224" stroke-width="1" fill="none" opacity="0.35" stroke-dasharray="4 4"/>
+    <circle cx="30" cy="30" r="9" fill="#FFB224"/><circle cx="90" cy="30" r="9" fill="#FFB224"/>
+    <circle cx="60" cy="60" r="9" fill="#FFB224"/>
+    <circle cx="30" cy="90" r="9" fill="#FFB224"/><circle cx="90" cy="90" r="9" fill="#FFB224"/>
   </svg>
   <div class="copy">
-    <h1>POCKET DYSTOPIA</h1>
+    <h1>Pocket Dystopia<span class="cursor"></span></h1>
     <p class="pitch">Roll a satirical dystopian story seed.<br>Lock what you love, re-roll the rest.</p>
     <p class="seed">In Sector 7, the year homework became illegal. <span class="hero">A kid raised by library robots</span> meets <span class="villain">a smart fridge with big ambitions</span>.</p>
     <p class="url">pocketdystopia.forhuman.ca</p>

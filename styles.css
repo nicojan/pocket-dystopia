@@ -3,44 +3,45 @@
    ============================================ */
 
 /* --- CSS Custom Properties --- */
+/* One chosen look: an amber-phosphor terminal on warm near-black (dark) or
+   warm paper (light). Amber is the single accent and means "act": Roll,
+   focus, the > prompt. Lock is neutral (filled icon + tinted row), so it
+   never competes with Roll. Every text tone is WCAG AA on every surface. */
 :root {
-  /* Dark mode (default) */
-  --bg-primary: #080A0D;
-  --bg-secondary: #0D1117;
-  --bg-elevated: #161B22;
-  --bg-overlay: #1E2329;
-  --text-primary: #E6EDF3;
-  --text-secondary: #8B949E;
-  /* Bumped from #4A5568 (2.63:1) to #737B85 (~4.6:1 against --bg-primary)
-     to meet WCAG AA, while staying visibly dimmer than --text-secondary. */
-  --text-tertiary: #737B85;
-  --text-inverse: #080A0D;
-  --accent-cyan: #00E5FF;
-  --accent-cyan-muted: #00ACC1;
-  --accent-cyan-dim: #006064;
-  --accent-amber: #FFB020;
-  --accent-amber-muted: #E09000;
-  --accent-amber-dim: #804D00;
-  --accent-red: #FF4D4D;
-  --accent-red-muted: #CC3333;
-  --accent-red-dim: #801A1A;
-  --accent-green: #4ADE80;
-  --accent-green-muted: #22C55E;
+  --bg-primary: #0F0E0C;
+  --bg-secondary: #171613;
+  --bg-elevated: #1E1C18;
+  --bg-overlay: #28251F;
+  --text-primary: #EEE8DD;
+  --text-secondary: #ABA396;
+  --text-tertiary: #968E81;
+  --text-inverse: #0F0E0C;
 
-  /* Role colors — Hero = growth/protagonist, Villain = danger/opposition */
-  --accent-hero: #4ADE80;
-  --accent-hero-muted: #22C55E;
-  --accent-villain: #FF4D4D;
-  --accent-villain-muted: #CC3333;
+  /* Accent: --accent fills (buttons, the die), --accent-ink draws text,
+     icons and focus rings. Same value in dark, darker ink on paper. */
+  --accent: #FFB224;
+  --accent-hover: #FFC456;
+  --accent-ink: #FFB224;
+  --on-accent: #0F0E0C;
 
-  --border-default: #30363D;
-  --border-subtle: #21262D;
-  --border-accent: #00E5FF;
+  --accent-red: #FF7B67;
+  --accent-red-muted: #E5604C;
+  --accent-red-tint: rgba(255, 123, 103, 0.1);
+  --on-destructive: #0F0E0C;
+  --accent-green: #7FD48B;
+  --accent-hero: #7FD48B;
+  --accent-villain: #FF7B67;
 
-  /* Lock state — amber, framed as "held / preserved" (see phase 12). Red
-     is reserved for destructive actions and the villain role. */
-  --accent-lock: #FFB020;
-  --accent-lock-glow: rgba(255, 176, 32, 0.35);
+  /* Lock: held, not alarming. */
+  --lock-ink: #EEE8DD;
+  --lock-tint: rgba(238, 232, 221, 0.07);
+  --lock-border: #6A6357;
+
+  --border-default: #322E27;
+  --border-subtle: #25221D;
+
+  --scrim: rgba(8, 7, 6, 0.72);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.45);
 
   /* Spacing */
   --space-2xs: 2px;
@@ -55,43 +56,55 @@
 
   /* Border Radii */
   --radius-none: 0px;
-  --radius-sm: 4px;
+  --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 24px;
 
-  /* Typography */
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-body: 'Space Mono', 'Courier New', monospace;
+  /* Typography: one family. Next for everything you read, its Mono sibling
+     for the terminal scaffolding (wordmark, > prompts, field labels). */
+  --font-body: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Atkinson Hyperlegible Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-display: var(--font-mono);
+
+  /* Motion: the only durations and easings in this file. Things arriving
+     decelerate (--ease-out); the die lands with a little overshoot. */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 360ms;
+  --stagger: 28ms;
 }
 
-/* Light mode */
 [data-theme="light"] {
-  --bg-primary: #FFFFFF;
-  --bg-secondary: #F6F8FA;
+  --bg-primary: #F5F2EA;
+  --bg-secondary: #FFFDF8;
   --bg-elevated: #FFFFFF;
-  --bg-overlay: #F0F2F5;
-  --text-primary: #1F2937;
-  --text-secondary: #6B7280;
-  /* Bumped from #9CA3AF (~2.7:1) to #6B7280 hue-shifted for AA. */
-  --text-tertiary: #737B86;
+  --bg-overlay: #ECE7DC;
+  --text-primary: #1E1C18;
+  --text-secondary: #5B544A;
+  --text-tertiary: #6B6458;
   --text-inverse: #FFFFFF;
-  --accent-cyan: #0891B2;
-  --accent-cyan-muted: #06B6D4;
-  --accent-amber: #D97706;
-  --accent-red: #DC2626;
-  --accent-green: #16A34A;
-  --border-default: #D1D5DB;
-  --border-subtle: #E5E7EB;
-  --border-accent: #0891B2;
-  /* Role colors (light) */
-  --accent-hero: #16A34A;
-  --accent-hero-muted: #15803D;
-  --accent-villain: #DC2626;
-  --accent-villain-muted: #B91C1C;
-  /* Lock state — amber in light mode, same semantics as dark */
-  --accent-lock: #D97706;
-  --accent-lock-glow: rgba(217, 119, 6, 0.25);
+  --accent: #F2A516;
+  --accent-hover: #E39710;
+  --accent-ink: #8F5400;
+  --on-accent: #1E1C18;
+  --accent-red: #BC3626;
+  --accent-red-muted: #A12C1E;
+  --accent-red-tint: rgba(188, 54, 38, 0.08);
+  --on-destructive: #FFFFFF;
+  --accent-green: #2A7537;
+  --accent-hero: #2A7537;
+  --accent-villain: #BC3626;
+  --lock-ink: #1E1C18;
+  --lock-tint: rgba(30, 28, 24, 0.055);
+  --lock-border: #A39B8D;
+  --border-default: #DDD5C7;
+  --border-subtle: #E8E2D6;
+  --scrim: rgba(30, 28, 24, 0.4);
+  --shadow-pop: 0 12px 32px rgba(30, 28, 24, 0.14);
 }
 
 /* --- Reset & Base --- */
@@ -113,28 +126,7 @@ body {
   color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
-}
-
-/* --- CRT Scanline Overlay (subtle; dialed down for readability) --- */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.06) 50%);
-  background-size: 100% 3px;
-  pointer-events: none;
-  z-index: 999;
-  opacity: 0.6;
-  mix-blend-mode: multiply;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  body::before { display: none; }
-}
-
-/* Users who request higher contrast don't want CRT fuzz. */
-@media (prefers-contrast: more) {
-  body::before { display: none; }
+  -webkit-font-smoothing: antialiased;
 }
 
 /* --- Skip Link --- */
@@ -142,8 +134,8 @@ body::before {
   position: absolute;
   top: -100%;
   left: var(--space-lg);
-  background: var(--accent-cyan);
-  color: var(--text-inverse);
+  background: var(--accent);
+  color: var(--on-accent);
   padding: var(--space-sm) var(--space-lg);
   border-radius: var(--radius-sm);
   font: 700 0.875rem/1.4 var(--font-body);
@@ -162,20 +154,28 @@ body::before {
    Footnote 13 / Caption1 12 / Caption2 11 */
 .text-display {
   /* Scales between Title1 (28pt) and Large Title (34pt)+ for impact */
-  font: 700 clamp(1.75rem, 5.5vw, 2.5rem)/1.12 var(--font-display);
-  letter-spacing: 3px;
+  font: 700 clamp(2rem, 6vw, 3rem)/1.1 var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* The wordmark's one flourish: a static amber block cursor. */
+.wordmark-cursor {
+  display: inline-block;
+  width: 0.55em;
+  height: 0.9em;
+  margin-left: 0.08em;
+  background: var(--accent);
+  vertical-align: -0.08em;
 }
 
 .text-heading {
   /* Title3: 20pt */
-  font: 700 1.25rem/1.25 var(--font-display);
+  font: 700 1.25rem/1.25 var(--font-body);
 }
 
 .text-subheading {
-  /* Headline: 17pt bold */
-  font: 700 1.0625rem/1.29 var(--font-body);
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
+  /* Headline: 17pt semibold */
+  font: 600 1.0625rem/1.29 var(--font-body);
 }
 
 .text-body {
@@ -212,7 +212,7 @@ body::before {
 
 /* --- Focus Indicators --- */
 :focus-visible {
-  outline: 2px solid var(--accent-cyan);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 2px;
 }
 
@@ -229,7 +229,7 @@ body::before {
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: var(--radius-md);
-  transition: color 0.2s ease, background 0.2s ease;
+  transition: color var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
 }
 
 .btn-icon:hover {
@@ -249,18 +249,18 @@ body::before {
   gap: var(--space-sm);
   min-height: 44px;
   padding: var(--space-md) var(--space-xl);
-  background: var(--accent-cyan);
-  color: var(--text-inverse);
+  background: var(--accent);
+  color: var(--on-accent);
   border: none;
   border-radius: var(--radius-md);
   /* HIG Headline: 17pt */
   font: 700 1.0625rem/1.29 var(--font-body);
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.1s ease;
+  transition: background var(--dur-base) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 
 .btn-primary:hover {
-  background: var(--accent-cyan-muted);
+  background: var(--accent-hover);
 }
 
 .btn-primary:active {
@@ -281,7 +281,7 @@ body::before {
   /* HIG Headline: 17pt */
   font: 700 1.0625rem/1.29 var(--font-body);
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background var(--dur-base) var(--ease-out);
 }
 
 .btn-secondary:hover {
@@ -321,21 +321,15 @@ body::before {
   padding: var(--space-3xl) var(--space-lg);
 }
 
-.intro-subtitle {
-  line-height: 1.8;
-}
-
 .intro-screen .text-display {
-  /* The intro title is the brand moment — keep a subtle cyan glow since
-     cyan still brands the app, but the title text itself is neutral so
-     the Roll CTA (the only other cyan surface) stays distinct. */
   color: var(--text-primary);
-  text-shadow: 0 0 30px rgba(0, 229, 255, 0.25);
 }
 
 .intro-subtitle {
   color: var(--text-secondary);
   max-width: 400px;
+  font-size: 1.125rem;
+  line-height: 1.5;
 }
 
 .intro-load {
@@ -358,7 +352,7 @@ body::before {
   font: 400 0.8125rem/1.3 var(--font-body);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: color 0.2s ease;
+  transition: color var(--dur-base) var(--ease-out);
 }
 
 .intro-load-disclosure:hover,
@@ -368,7 +362,7 @@ body::before {
 
 .intro-load-disclosure .material-symbols-outlined {
   font-size: 16px;
-  transition: transform 200ms ease;
+  transition: transform var(--dur-base) var(--ease-out);
 }
 
 .intro-load-disclosure[aria-expanded="true"] .material-symbols-outlined {
@@ -445,7 +439,7 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: die-float 3s ease-in-out infinite;
+  animation: die-float 4s var(--ease-in-out) infinite;
 }
 
 .die-shape {
@@ -460,8 +454,12 @@ body::before {
 .die-shape svg {
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 0 20px rgba(0, 229, 255, 0.4));
-  animation: glow-pulse 4s ease-in-out infinite;
+  /* The die is the one object allowed a glow: a still, warm halo. */
+  filter: drop-shadow(0 0 18px rgba(255, 178, 36, 0.28));
+}
+
+[data-theme="light"] .die-shape svg {
+  filter: drop-shadow(0 4px 10px rgba(143, 84, 0, 0.12));
 }
 
 .die-hint {
@@ -482,74 +480,7 @@ body::before {
 
 @keyframes die-float {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-@keyframes glow-pulse {
-  0%, 100% { filter: drop-shadow(0 0 15px rgba(0, 229, 255, 0.3)); }
-  50% { filter: drop-shadow(0 0 30px rgba(0, 229, 255, 0.6)); }
-}
-
-/* Die face fizzle (CRT static on each face swap) */
-@keyframes die-fizzle {
-  0% {
-    opacity: 0.3;
-    filter: blur(2.5px) brightness(2) hue-rotate(-12deg) contrast(1.3);
-    transform: translateX(-2px) skewX(4deg);
-    clip-path: inset(40% 0 40% 0);
-  }
-  20% {
-    opacity: 1;
-    filter: blur(1px) brightness(1.6) hue-rotate(6deg);
-    transform: translateX(3px);
-    clip-path: inset(0 0 55% 0);
-  }
-  40% {
-    opacity: 0.5;
-    filter: blur(0.5px) brightness(1.2);
-    transform: translateX(-2px);
-    clip-path: inset(25% 0 15% 0);
-  }
-  60% {
-    opacity: 1;
-    filter: brightness(1.25);
-    transform: translateX(1px);
-    clip-path: inset(0);
-  }
-  100% {
-    opacity: 1;
-    filter: none;
-    transform: none;
-  }
-}
-
-.die-shape.die-fizzle {
-  animation: die-fizzle 260ms steps(8, end) both;
-}
-
-/* Dramatic shake during an active roll */
-@keyframes die-shake {
-  0%, 100% { transform: translate(0, 0) rotate(0); }
-  10% { transform: translate(-5px, -3px) rotate(-2deg); }
-  20% { transform: translate(6px, 2px) rotate(2deg); }
-  30% { transform: translate(-4px, 4px) rotate(-3deg); }
-  40% { transform: translate(5px, -4px) rotate(2deg); }
-  50% { transform: translate(-6px, 3px) rotate(-2deg); }
-  60% { transform: translate(4px, -2px) rotate(3deg); }
-  70% { transform: translate(-3px, 5px) rotate(-2deg); }
-  80% { transform: translate(6px, 1px) rotate(2deg); }
-  90% { transform: translate(-4px, -3px) rotate(-1deg); }
-}
-
-.die-container.die-shaking {
-  animation: die-shake 110ms linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .die-shape.die-fizzle,
-  .die-container.die-shaking {
-    animation: none;
-  }
+  50% { transform: translateY(-4px); }
 }
 
 /* Die tumble animations */
@@ -578,11 +509,11 @@ body::before {
   100% { transform: perspective(400px) rotate3d(1, 1, 0, 360deg); }
 }
 
-.die-tumble-x .die-shape { animation: tumble-x 650ms ease-in-out; }
-.die-tumble-x-neg .die-shape { animation: tumble-x-neg 650ms ease-in-out; }
-.die-tumble-y .die-shape { animation: tumble-y 650ms ease-in-out; }
-.die-tumble-y-neg .die-shape { animation: tumble-y-neg 650ms ease-in-out; }
-.die-tumble-diag .die-shape { animation: tumble-diag 650ms ease-in-out; }
+.die-tumble-x .die-shape { animation: tumble-x 700ms var(--ease-spring); }
+.die-tumble-x-neg .die-shape { animation: tumble-x-neg 700ms var(--ease-spring); }
+.die-tumble-y .die-shape { animation: tumble-y 700ms var(--ease-spring); }
+.die-tumble-y-neg .die-shape { animation: tumble-y-neg 700ms var(--ease-spring); }
+.die-tumble-diag .die-shape { animation: tumble-diag 700ms var(--ease-spring); }
 
 /* --- Top Bar --- */
 .top-bar {
@@ -611,11 +542,10 @@ body::before {
   padding: var(--space-xs) var(--space-sm);
   margin: 0;
   cursor: pointer;
-  font: 700 1rem/1 var(--font-display);
+  font: 700 1.0625rem/1 var(--font-display);
   color: var(--text-primary);
-  letter-spacing: 2px;
   border-radius: var(--radius-sm);
-  transition: opacity 0.2s ease, color 0.2s ease;
+  transition: opacity var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
 }
 
 .top-bar-title:hover {
@@ -654,7 +584,7 @@ body::before {
   height: 100%;
 }
 
-.btn-primary .roll-die-icon { color: var(--text-inverse); }
+.btn-primary .roll-die-icon { color: var(--on-accent); }
 
 .btn-roll {
   padding: var(--space-sm) var(--space-lg);
@@ -732,12 +662,10 @@ body::before {
   background: none;
   border: none;
   color: var(--text-tertiary);
-  font: 700 0.75rem/1.33 var(--font-body);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font: 600 0.8125rem/1.33 var(--font-body);
   cursor: pointer;
   min-height: 36px;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: background var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
 }
 
 .view-toggle button.active {
@@ -774,10 +702,10 @@ body::before {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font: 700 0.9375rem/1.33 var(--font-body);
+  font: 600 0.9375rem/1.33 var(--font-body);
   min-height: 44px;
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition: border-color var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
   white-space: nowrap;
 }
 
@@ -798,7 +726,7 @@ body::before {
 .mood-combobox-chevron {
   font-size: 18px;
   color: var(--text-secondary);
-  transition: transform 200ms ease;
+  transition: transform var(--dur-base) var(--ease-out);
 }
 
 .mood-combobox[aria-expanded="true"] .mood-combobox-chevron {
@@ -816,15 +744,11 @@ body::before {
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-pop);
   z-index: 150;
   display: flex;
   flex-direction: column;
   gap: var(--space-2xs);
-}
-
-.mood-listbox[hidden] {
-  display: none !important;
 }
 
 .mood-option {
@@ -837,7 +761,7 @@ body::before {
   font: 400 0.9375rem/1.33 var(--font-body);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .mood-option:hover,
@@ -847,13 +771,13 @@ body::before {
 }
 
 .mood-option:focus-visible {
-  outline: 2px solid var(--accent-cyan);
+  outline: 2px solid var(--accent-ink);
   outline-offset: -2px;
 }
 
 .mood-option-check {
   font-size: 18px;
-  color: var(--accent-cyan);
+  color: var(--accent-ink);
   opacity: 0;
   flex-shrink: 0;
 }
@@ -883,7 +807,7 @@ body::before {
 
 /* --- Logline --- */
 .logline-container {
-  padding-top: var(--space-lg);
+  padding-top: var(--space-xl);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -894,19 +818,18 @@ body::before {
   display: none !important;
 }
 
+/* The logline is the build's headline: the sentence a kid reads out loud.
+   No box, no rule; size and position carry it. */
 .logline-box {
   width: 100%;
-  padding: var(--space-lg);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-left: 2px solid rgba(0, 229, 255, 0.35);
-  border-radius: var(--radius-md);
 }
 
 .logline-text {
   color: var(--text-primary);
-  font: 400 0.9rem/1.35 var(--font-body);
+  font: 500 clamp(1.1875rem, 1rem + 0.6vw, 1.4375rem)/1.42 var(--font-body);
+  max-width: 62ch;
   margin: 0;
+  text-wrap: pretty;
 }
 
 .logline-copy-btn {
@@ -921,7 +844,7 @@ body::before {
   font: 400 0.875rem/1.3 var(--font-body);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: color 0.2s ease, border-color 0.2s ease;
+  transition: color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
 }
 
 .logline-copy-btn:hover,
@@ -934,39 +857,28 @@ body::before {
   font-size: 16px;
 }
 
-/* Logline re-render uses the same fizzle tone as traits but tuned for
-   a paragraph rather than single rows. */
-.logline-fizzle {
-  animation: logline-fizzle 460ms steps(10, end) both;
-}
-
-@keyframes logline-fizzle {
-  0% {
+/* --- Arrival motion ---
+   New text is dealt in, row by row in reading order: a short fade and a
+   4px rise, staggered by --i (set in renderCards). One gesture for the
+   logline, the traits and the present view. */
+@keyframes text-enter {
+  from {
     opacity: 0;
-    filter: blur(2px) brightness(1.6);
-    transform: translateX(-2px);
+    transform: translateY(4px);
   }
-  20% {
+  to {
     opacity: 1;
-    filter: blur(1px) brightness(1.3);
-    transform: translateX(2px);
-  }
-  60% {
-    opacity: 0.7;
-    filter: brightness(1.1);
-    transform: translateX(-1px);
-  }
-  100% {
-    opacity: 1;
-    filter: none;
     transform: none;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .logline-fizzle {
-    animation: none;
-  }
+.logline-enter,
+.trait-enter .trait-text,
+.trait-enter .trait-prefix,
+.trait-enter .trait-label,
+.present-enter {
+  animation: text-enter var(--dur-base) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * var(--stagger));
 }
 
 .cards-grid {
@@ -997,93 +909,27 @@ body::before {
 }
 
 /* --- Cards --- */
+/* Quiet containers: one surface step and a hairline. Role is carried by the
+   heading colour alone, lock by a filled icon and a neutral border. */
 .card {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  transition: border-color 0.3s ease;
   position: relative;
+  transition: border-color var(--dur-base) var(--ease-out);
 }
 
-/* Role-coded top accent stripe: reinforces hero/villain at card level
-   without adding weight to the non-role cards (squad / setting / obstacles). */
-.card[data-section="hero"]::before,
-.card[data-section="villain"]::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  pointer-events: none;
-}
-
-.card[data-section="hero"]::before {
-  background: var(--accent-hero);
-}
-
-.card[data-section="villain"]::before {
-  background: var(--accent-villain);
-}
-
-.card {
-  /* Smooth lock transitions (phase 7) — 150ms instead of instant. */
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+[data-theme="light"] .card {
+  border-color: var(--border-default);
 }
 
 .card.locked {
-  border-color: var(--accent-lock);
-  box-shadow: 0 0 0 1px var(--accent-lock), 0 0 16px var(--accent-lock-glow);
-}
-
-/* Card pulse on section re-roll — brief cyan border flash with a tiny scale. */
-@keyframes card-pulse {
-  0% {
-    box-shadow: 0 0 0 1px var(--accent-cyan);
-    transform: scale(1.005);
-  }
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-    transform: scale(1);
-  }
-}
-
-.card.card-pulse {
-  animation: card-pulse 400ms ease-out;
-}
-
-/* Role cards use their role color for the pulse so it doesn't mix oddly
-   with the top stripe (green+cyan or red+cyan smear). */
-.card[data-section="hero"].card-pulse {
-  animation-name: card-pulse-hero;
-}
-.card[data-section="villain"].card-pulse {
-  animation-name: card-pulse-villain;
-}
-
-@keyframes card-pulse-hero {
-  0% { box-shadow: 0 0 0 1px var(--accent-hero); transform: scale(1.005); }
-  100% { box-shadow: 0 0 0 0 transparent; transform: scale(1); }
-}
-
-@keyframes card-pulse-villain {
-  0% { box-shadow: 0 0 0 1px var(--accent-villain); transform: scale(1.005); }
-  100% { box-shadow: 0 0 0 0 transparent; transform: scale(1); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  @keyframes card-pulse-reduced {
-    0%   { box-shadow: 0 0 0 1px var(--accent-cyan); }
-    100% { box-shadow: 0 0 0 0 transparent; }
-  }
-  .card.card-pulse {
-    animation: card-pulse-reduced 400ms ease-out;
-  }
+  border-color: var(--lock-border);
 }
 
 .card.locked .lock-icon {
-  color: var(--accent-lock);
+  color: var(--lock-ink);
 }
 
 .card-header {
@@ -1096,10 +942,8 @@ body::before {
 }
 
 .card-header-title {
-  /* HIG Headline: 17pt */
-  font: 700 1.0625rem/1.29 var(--font-body);
-  text-transform: uppercase;
-  letter-spacing: 2px;
+  /* Title3: 20pt — a real step above the 17pt traits. */
+  font: 700 1.25rem/1.25 var(--font-body);
   /* Neutral default — role colors (hero/villain) override below.
      Squad, Setting, Obstacles are ensemble/context, stay neutral. */
   color: var(--text-primary);
@@ -1119,21 +963,13 @@ body::before {
   color: var(--accent-villain);
 }
 
-/* The >> is decoration — muted, not a control. */
-.card-header-prefix {
-  color: var(--text-tertiary);
-  font-weight: 400;
-  font-size: 0.875rem;
-  letter-spacing: 1px;
-}
-
 /* Disclosure chevron — mobile only, rotates when expanded. */
 .card-chevron {
   display: none;
 }
 
 .card-chevron .material-symbols-outlined {
-  transition: transform 200ms ease;
+  transition: transform var(--dur-base) var(--ease-out);
 }
 
 .card.expanded .card-chevron .material-symbols-outlined {
@@ -1175,7 +1011,7 @@ body::before {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  transition: grid-template-rows 0.3s ease, opacity 0.25s ease;
+  transition: grid-template-rows var(--dur-slow) var(--ease-out), opacity var(--dur-base) var(--ease-out);
 }
 
 .card-content-inner {
@@ -1214,11 +1050,10 @@ body::before {
   display: flex;
   align-items: flex-start;
   gap: var(--space-sm);
-  padding: var(--space-xs) 0;
-  border-left: 2px solid transparent;
-  padding-left: var(--space-sm);
-  /* Smooth lock border fade (phase 7) */
-  transition: border-color 150ms ease;
+  padding: var(--space-xs) 0 var(--space-xs) var(--space-sm);
+  margin-inline: calc(-1 * var(--space-xs));
+  border-radius: var(--radius-sm);
+  transition: background-color var(--dur-base) var(--ease-out);
   min-height: 28px;
 }
 
@@ -1231,17 +1066,25 @@ body::before {
   line-height: 1.5625rem; /* = 17px × 1.47, matches .trait-text line box */
 }
 
+/* Held: the whole row is tinted, the lock fills in. No coloured edge. */
 .trait-line.trait-locked {
-  border-left-color: var(--accent-lock);
-  border-left-width: 2px;
+  background: var(--lock-tint);
 }
 
 .trait-line.trait-locked .trait-lock {
-  color: var(--accent-lock);
+  color: var(--lock-ink);
 }
 
+/* A locked card already says "held" with its border; tinting every row
+   inside it would just stack bars. */
+.card.locked .trait-line.trait-locked {
+  background: none;
+}
+
+/* The > prompt: the app's one piece of terminal punctuation, in amber. */
 .trait-prefix {
-  color: var(--text-secondary);
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
   font-weight: 700;
   flex-shrink: 0;
   min-width: 16px;
@@ -1253,16 +1096,14 @@ body::before {
 }
 
 .trait-label {
-  /* Field-type labels (WEAK, TRAUMA, WHEN, WHERE). Amber was dropped
-     when lock moved to amber — the uppercase monospace + letter-spacing
-     already signals "label, not content". Color goes structural. */
+  /* Field-type labels (WEAK, TRAUMA, WHEN, WHERE): mono caps at the family's
+     own spacing — the only caps in the UI. */
   color: var(--text-secondary);
+  font-family: var(--font-mono);
   font-weight: 700;
   flex-shrink: 0;
-  text-transform: uppercase;
   /* HIG Footnote: 13pt */
   font-size: 0.8125rem;
-  letter-spacing: 0.5px;
 }
 
 /* Group for swap + lock buttons at the end of each trait row.
@@ -1278,7 +1119,7 @@ body::before {
 .trait-lock,
 .trait-swap {
   color: var(--text-tertiary);
-  transition: opacity 0.2s ease, color 0.2s ease;
+  transition: opacity var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
   flex-shrink: 0;
   min-width: 36px;
   min-height: 36px;
@@ -1332,28 +1173,68 @@ body::before {
 }
 
 .lock-icon,
-.lock-icon .material-symbols-outlined {
-  transition: transform 0.2s ease, color 150ms ease, font-variation-settings 150ms ease;
+.lock-icon .material-symbols-outlined,
+.trait-lock .material-symbols-outlined {
+  transition: transform var(--dur-base) var(--ease-spring), color var(--dur-fast) var(--ease-out);
 }
 
-.lock-icon:active {
+.lock-icon:active,
+.trait-lock:active .material-symbols-outlined {
   transform: scale(0.85);
 }
 
 /* --- Modal --- */
-.modal-overlay {
+/* Overlays fade in and out; the panel inside rises 8px and settles.
+   @starting-style animates out of display:none with no JS. */
+.modal-overlay,
+.confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--scrim);
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 500;
   padding: var(--space-lg);
+  opacity: 0;
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    display var(--dur-base) allow-discrete;
 }
 
-.modal-overlay.active {
+.modal-overlay {
+  z-index: 500;
+}
+
+/* While fading out they are still display:flex for a moment; they must not
+   catch the next click. pointer-events isn't transitioned, so this is instant. */
+.modal-overlay:not(.active),
+.confirm-overlay:not(.active) {
+  pointer-events: none;
+}
+
+.modal-overlay.active,
+.confirm-overlay.active {
   display: flex;
+  opacity: 1;
+
+  @starting-style {
+    opacity: 0;
+  }
+}
+
+.modal,
+.confirm-dialog {
+  transform: translateY(8px) scale(0.985);
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.active > .modal,
+.active > .confirm-dialog {
+  transform: none;
+
+  @starting-style {
+    transform: translateY(8px) scale(0.985);
+  }
 }
 
 .modal {
@@ -1380,7 +1261,7 @@ body::before {
 }
 
 .modal-title {
-  font: 700 1.25rem/1.3 var(--font-display);
+  font: 700 1.25rem/1.3 var(--font-body);
   color: var(--text-primary);
 }
 
@@ -1392,8 +1273,7 @@ body::before {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font: 400 1rem/1.4 var(--font-body);
-  letter-spacing: 0.5px;
+  font: 400 1rem/1.4 var(--font-mono);
   text-overflow: ellipsis;
 }
 
@@ -1453,7 +1333,7 @@ body::before {
 
 .share-code-chevron {
   font-size: 18px;
-  transition: transform 200ms ease;
+  transition: transform var(--dur-base) var(--ease-out);
 }
 
 .share-code-disclosure[aria-expanded="true"] .share-code-chevron {
@@ -1497,14 +1377,12 @@ body::before {
   background: var(--bg-overlay);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font: 700 0.75rem/1.2 var(--font-body);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  font: 600 0.8125rem/1.2 var(--font-body);
   color: var(--text-primary);
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 200ms ease, transform 200ms ease;
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
 }
 
 .btn-undo.btn-undo-label-visible:not(:disabled) .btn-undo-label,
@@ -1564,8 +1442,7 @@ kbd {
   border-bottom-width: 2px;
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font: 700 0.75rem/1 var(--font-body);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+  font: 700 0.75rem/1 var(--font-mono);
 }
 
 /* --- Pinned Builds Panel --- */
@@ -1632,7 +1509,7 @@ kbd {
   font: inherit;
   color: var(--text-primary);
   position: relative;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
 }
 
 .pin-slot-empty {
@@ -1649,12 +1526,12 @@ kbd {
 
 .pin-slot-empty:hover:not(.disabled),
 .pin-slot-empty:focus-visible {
-  border-color: var(--accent-cyan);
+  border-color: var(--accent-ink);
 }
 
 .pin-slot-empty:hover:not(.disabled) .material-symbols-outlined,
 .pin-slot-empty:focus-visible .material-symbols-outlined {
-  color: var(--accent-cyan);
+  color: var(--accent-ink);
 }
 
 .pin-slot-empty.disabled,
@@ -1709,7 +1586,7 @@ kbd {
 }
 
 .pin-slot-current {
-  border-color: var(--accent-cyan);
+  border-color: var(--accent-ink);
 }
 
 .pin-slot-load:disabled {
@@ -1756,11 +1633,11 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 77, 77, 0.12);
+  background: var(--accent-red-tint);
   color: var(--accent-villain);
   font-weight: 700;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--dur-base) var(--ease-out);
   border-radius: var(--radius-md);
   pointer-events: none;
 }
@@ -1786,108 +1663,15 @@ kbd {
   text-align: center;
   color: var(--text-primary);
   font: 400 0.875rem/1.4 var(--font-body);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-pop);
   z-index: 800;
   pointer-events: none;
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out);
 }
 
 .toast.visible {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
-}
-
-/* --- Trait Fizzle (CRT static on regenerate) --- */
-@keyframes trait-fizzle {
-  0% {
-    opacity: 0;
-    filter: blur(3px) brightness(2) contrast(1.4) hue-rotate(-10deg);
-    transform: translateX(-3px) skewX(6deg);
-    clip-path: inset(40% 0 40% 0);
-  }
-  15% {
-    opacity: 1;
-    filter: blur(1.5px) brightness(1.6) hue-rotate(8deg);
-    transform: translateX(4px);
-    clip-path: inset(0 0 60% 0);
-  }
-  30% {
-    opacity: 0.35;
-    filter: blur(0.5px) brightness(1.2);
-    transform: translateX(-2px);
-    clip-path: inset(20% 0 10% 0);
-  }
-  50% {
-    opacity: 1;
-    filter: brightness(1.35) contrast(1.1);
-    transform: translateX(1px);
-    clip-path: inset(0 0 0 0);
-  }
-  70% {
-    opacity: 0.8;
-    filter: brightness(0.9);
-    transform: translateX(-1px);
-  }
-  100% {
-    opacity: 1;
-    filter: none;
-    transform: none;
-    clip-path: inset(0);
-  }
-}
-
-.trait-fizzle {
-  animation: trait-fizzle 460ms steps(10, end) both;
-  will-change: opacity, filter, transform;
-}
-
-/* Cyan glow on the row that just changed — rises fast, fades long. */
-.trait-fizzle .trait-text {
-  animation-name: trait-fizzle-scan, trait-glow;
-  animation-duration: 460ms, 550ms;
-  animation-timing-function: steps(10, end), ease-out;
-  animation-fill-mode: both, both;
-}
-
-@keyframes trait-glow {
-  0%   { text-shadow: none; }
-  28%  { text-shadow: 0 0 8px rgba(0, 229, 255, 0.6); }
-  100% { text-shadow: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .trait-fizzle .trait-text {
-    animation: none;
-  }
-}
-
-/* The short burst of "scanlines" feels more CRT-y on a dark bg */
-.trait-fizzle .trait-text {
-  background: linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 3px,
-    rgba(0, 229, 255, 0.08) 3px,
-    rgba(0, 229, 255, 0.08) 4px
-  );
-  background-size: 100% 4px;
-  animation: trait-fizzle-scan 460ms steps(10, end) both;
-}
-
-@keyframes trait-fizzle-scan {
-  0%, 80% { background-position: 0 0; }
-  20% { background-position: 0 4px; }
-  40% { background-position: 0 -2px; }
-  60% { background-position: 0 2px; }
-  100% { background: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .trait-fizzle,
-  .trait-fizzle .trait-text {
-    animation: none;
-    background: none;
-  }
 }
 
 /* --- CRT Boot Animation --- */
@@ -1922,7 +1706,7 @@ kbd {
 }
 
 .crt-boot {
-  animation: crt-boot 600ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  animation: crt-boot 600ms var(--ease-out) forwards;
 }
 
 /* --- Reduced Motion --- */
@@ -1930,6 +1714,7 @@ kbd {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
   }
 }
@@ -1949,15 +1734,37 @@ kbd {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   padding: var(--space-xs);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-pop);
   z-index: 200;
   display: flex;
   flex-direction: column;
   gap: var(--space-2xs);
 }
 
-.more-menu[hidden] {
-  display: none;
+.more-menu,
+.mood-listbox {
+  transform-origin: top right;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-base) var(--ease-out),
+    display var(--dur-base) allow-discrete;
+
+  @starting-style {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+.mood-listbox {
+  transform-origin: top left;
+}
+
+.more-menu[hidden],
+.mood-listbox[hidden] {
+  display: none !important;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
 }
 
 /* The More button sits at the right of the top bar on every width, so the
@@ -1980,7 +1787,7 @@ kbd {
   text-align: left;
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   width: 100%;
 }
 
@@ -1996,7 +1803,7 @@ kbd {
 }
 
 .more-menu-item:focus-visible {
-  outline: 2px solid var(--accent-cyan);
+  outline: 2px solid var(--accent-ink);
   outline-offset: -2px;
 }
 
@@ -2012,12 +1819,12 @@ kbd {
 .more-menu-check {
   margin-left: auto;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 .more-menu-item[aria-checked="true"] .more-menu-check {
   opacity: 1;
-  color: var(--accent-cyan);
+  color: var(--accent-ink);
 }
 
 .more-menu-divider {
@@ -2033,7 +1840,7 @@ kbd {
 
 .more-menu-destructive:hover,
 .more-menu-destructive:focus-visible {
-  background: rgba(255, 77, 77, 0.08);
+  background: var(--accent-red-tint);
 }
 
 /* The left-handed item only makes sense where the layout actually flips
@@ -2049,7 +1856,6 @@ kbd {
   /* Tiny viewports — pull trait text down one step and tighten slightly. */
   .trait-text {
     font-size: 1rem;
-    letter-spacing: -0.1px;
   }
 }
 
@@ -2057,8 +1863,7 @@ kbd {
   /* Phone top bar: title (doubles as home) + share, pin, more. Roll and
      Undo move to the thumb-zone action bar at the bottom. */
   .top-bar-title {
-    font-size: 0.875rem;
-    letter-spacing: 1.5px;
+    font-size: 1rem;
     padding-inline: 0;
     white-space: nowrap;
   }
@@ -2075,10 +1880,6 @@ kbd {
   .top-bar #btn-undo,
   .top-bar #btn-roll-all {
     display: none;
-  }
-
-  .text-display {
-    letter-spacing: 2px;
   }
 
   .card-header {
@@ -2237,13 +2038,11 @@ kbd {
 
 @media (max-width: 359px) {
   .top-bar-title {
-    font-size: 0.8125rem;
-    letter-spacing: 1px;
+    font-size: 0.9375rem;
   }
 
   .card-header-title {
-    letter-spacing: 1px;
-    font-size: 0.9375rem;
+    font-size: 1.125rem;
   }
 }
 
@@ -2266,18 +2065,7 @@ kbd {
 
 /* --- Confirm Dialog --- */
 .confirm-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: none;
-  align-items: center;
-  justify-content: center;
   z-index: 700;
-  padding: var(--space-lg);
-}
-
-.confirm-overlay.active {
-  display: flex;
 }
 
 .confirm-dialog {
@@ -2291,7 +2079,7 @@ kbd {
 }
 
 .confirm-title {
-  font: 700 1.25rem/1.3 var(--font-display);
+  font: 700 1.25rem/1.3 var(--font-body);
   color: var(--text-primary);
   margin-bottom: var(--space-md);
 }
@@ -2305,7 +2093,7 @@ kbd {
 /* Destructive primary (e.g. "Clear it" in the reset confirm dialog) */
 .btn-destructive {
   background: var(--accent-red);
-  color: white;
+  color: var(--on-destructive);
 }
 
 .btn-destructive:hover {
@@ -2399,16 +2187,15 @@ kbd {
 
 .present-brand {
   font: 700 0.8em/1 var(--font-display);
-  letter-spacing: 0.2em;
   color: var(--text-tertiary);
 }
 
 .present-logline {
-  font-size: 1.45em;
+  font-size: 1.5em;
+  font-weight: 500;
   line-height: 1.3;
   max-width: 62ch;
-  padding-left: 0.6em;
-  border-left: 0.18em solid var(--accent-cyan);
+  text-wrap: pretty;
 }
 
 .present-grid {
@@ -2428,14 +2215,8 @@ kbd {
 }
 
 .present-card-title {
-  font: 700 0.85em/1.2 var(--font-body);
-  letter-spacing: 0.12em;
+  font: 700 1em/1.2 var(--font-body);
   margin-bottom: 0.35em;
-}
-
-.present-card-title span {
-  color: var(--text-tertiary);
-  font-weight: 400;
 }
 
 .present-card-hero .present-card-title { color: var(--accent-hero); }
@@ -2455,30 +2236,32 @@ kbd {
 
 .present-prefix,
 .present-label {
-  color: var(--text-tertiary);
+  font-family: var(--font-mono);
   font-weight: 700;
   flex-shrink: 0;
 }
 
+.present-prefix {
+  color: var(--accent-ink);
+}
+
 .present-label {
+  color: var(--text-secondary);
   font-size: 0.7em;
   line-height: 1.9;
-  letter-spacing: 0.05em;
 }
 
 .present-held {
-  box-shadow: inset 0.14em 0 0 var(--accent-lock);
-  padding-left: 0.45em;
+  background: var(--lock-tint);
+  border-radius: 0.2em;
+  padding-inline: 0.3em;
+  margin-inline: -0.3em;
 }
 
 .present-lock {
   font-size: 0.9em;
-  color: var(--accent-lock);
+  color: var(--lock-ink);
   vertical-align: -0.1em;
-}
-
-.present-fizzle {
-  animation: logline-fizzle 460ms steps(10, end) both;
 }
 
 .present-controls {
@@ -2489,7 +2272,7 @@ kbd {
   align-items: center;
   gap: var(--space-sm);
   opacity: 0.55;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--dur-base) var(--ease-out);
 }
 
 .present-controls:hover,
@@ -2552,10 +2335,6 @@ kbd {
     min-height: 0;
   }
 
-  body::before {
-    display: none !important;
-  }
-
   .print-sheet {
     color: #000;
     font: 400 10.5pt/1.45 var(--font-body);
@@ -2577,7 +2356,6 @@ kbd {
 
   .ws-header h1 {
     font: 700 15pt/1.2 var(--font-display);
-    letter-spacing: 1pt;
     white-space: nowrap;
   }
 
@@ -2599,9 +2377,9 @@ kbd {
   }
 
   .ws-logline {
-    font-size: 11pt;
-    padding: 6pt 0 6pt 8pt;
-    border-left: 2pt solid #000;
+    font-size: 12pt;
+    font-weight: 500;
+    line-height: 1.4;
     margin-bottom: 10pt;
   }
 
@@ -2617,8 +2395,7 @@ kbd {
   }
 
   .ws-section h3 {
-    font: 700 9pt/1.3 var(--font-body);
-    letter-spacing: 1pt;
+    font: 700 10pt/1.3 var(--font-body);
     margin-bottom: 2pt;
   }
 
@@ -2641,7 +2418,7 @@ kbd {
   }
 
   .ws-turn {
-    font: 700 12pt/1.3 var(--font-display);
+    font: 700 12pt/1.3 var(--font-body);
     margin-bottom: 4pt;
   }
 

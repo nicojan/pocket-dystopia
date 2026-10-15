@@ -178,3 +178,19 @@ test.describe('classroom', () => {
     await expect(page.locator('#print-sheet')).toBeHidden();
   });
 });
+
+test.describe('motion', () => {
+  test('reduced motion: a re-roll leaves nothing animating', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await freshRoll(page);
+    await page.evaluate(() => rollDie());
+    // The new build lands ~300ms in; the card-height glide would run 360ms
+    // from there, so this samples mid-glide.
+    await page.waitForTimeout(450);
+    const running = await page.evaluate(() => document.getAnimations()
+      .filter(a => a.playState === 'running' && a.effect?.target?.closest?.('#results-container, #logline-container'))
+      .length);
+    expect(running).toBe(0);
+  });
+
+});

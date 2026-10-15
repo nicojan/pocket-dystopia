@@ -14,13 +14,11 @@ let isFirstRoll = true;
 let lastTumbleDir = '';
 let dieIdleInterval = null;
 // Snapshot of the last rendered state, used to detect which traits changed
-// between renders so we can play the CRT-fizzle animation only on new ones.
+// between renders so only the new ones animate in.
 let lastRenderedSnapshot = null;
 // Cards the user opened or closed by hand in Compressed/Expanded view, so a
 // re-render (lock, swap, undo…) doesn't snap them back. Cleared by setView.
 let manualExpanded = {};
-// Section keys scheduled to play the card-pulse effect on next render.
-const pulseAfterRender = new Set();
 
 // ============================================
 // D6 Face SVGs
@@ -36,8 +34,8 @@ const DIE_PIPS = {
 };
 
 function getDieFaceSVG(n, opts = {}) {
-  const pipFill = opts.pipFill || 'var(--accent-cyan)';
-  const stroke = opts.stroke || 'var(--accent-cyan)';
+  const pipFill = opts.pipFill || 'var(--accent-ink)';
+  const stroke = opts.stroke || 'var(--accent-ink)';
   const fill = opts.fill || 'var(--bg-elevated)';
   const strokeWidth = opts.strokeWidth || 2;
   const pips = DIE_PIPS[n].map(
@@ -56,21 +54,15 @@ function getDieFaceSVG(n, opts = {}) {
   `;
 }
 
-// Fizzle roughly every N face swaps so the effect is punctuation,
-// not a constant strobe.
-const DIE_FIZZLE_EVERY = 3;
-let dieFaceSwapCount = 0;
+function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+// Faces swap cleanly; the tumble carries the motion. Real dice don't fade.
 function setDieFace(n) {
   const el = document.getElementById('die-face');
   if (!el) return;
   el.innerHTML = getDieFaceSVG(n);
-  dieFaceSwapCount += 1;
-  if (dieFaceSwapCount % DIE_FIZZLE_EVERY === 0) {
-    el.classList.remove('die-fizzle');
-    // Force reflow so the animation restarts even if the class was just removed.
-    void el.offsetWidth;
-    el.classList.add('die-fizzle');
-  }
 }
 
 // Small d6 icon inside the "Roll" button — cycles forever.
@@ -121,10 +113,17 @@ function savePrefs(prefs) {
   }
 }
 
+// The browser chrome (address bar, iOS status bar) follows the page ground.
+function setThemeAttr(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const ground = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim();
+  if (ground) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', ground);
+}
+
 function applyPrefs() {
   const prefs = loadPrefs();
   const theme = prefs.theme || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-  document.documentElement.setAttribute('data-theme', theme);
+  setThemeAttr(theme);
   document.documentElement.setAttribute('data-left-handed', String(prefs.leftHanded));
   updateMoreMenuState();
   setView(prefs.defaultView || 'expanded');
@@ -157,7 +156,7 @@ function updateMoreMenuState() {
 function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
+  setThemeAttr(next);
   updateMoreMenuState();
   const prefs = loadPrefs();
   savePrefs({ ...prefs, theme: next });
@@ -418,8 +417,6 @@ function rerollSection(sectionKey) {
   if (section.locked) return;
 
   pushHistory();
-  // Flag the section for a card-level pulse once renderCards rebuilds the DOM.
-  pulseAfterRender.add(sectionKey);
   const mood = getCurrentMood();
 
   switch (sectionKey) {
@@ -526,9 +523,6 @@ function rollDie() {
   if (isRolling) return;
   isRolling = true;
 
-  const container = document.getElementById('die-container');
-  if (container) container.classList.add('die-shaking');
-
   const dieWrapper = document.querySelector('.die-wrapper');
 
   if (dieIdleInterval) {
@@ -557,16 +551,19 @@ function rollDie() {
   if (isFirstRoll && dieWrapper) {
     // CRT boot on results
     setTimeout(() => {
-      generateNightmare();
-      const resultsContainer = document.getElementById('results-container');
-      if (resultsContainer) {
-        resultsContainer.classList.add('crt-boot');
-        setTimeout(() => resultsContainer.classList.remove('crt-boot'), 700);
+      try {
+        generateNightmare();
+        const resultsContainer = document.getElementById('results-container');
+        if (resultsContainer) {
+          resultsContainer.classList.add('crt-boot');
+          setTimeout(() => resultsContainer.classList.remove('crt-boot'), 700);
+        }
+        isFirstRoll = false;
+      } finally {
+        // Never leave the die locked out, even if the render throws.
+        isRolling = false;
+        startDieIdleCycle();
       }
-      if (container) container.classList.remove('die-shaking');
-      isFirstRoll = false;
-      isRolling = false;
-      startDieIdleCycle();
     }, 900);
   } else {
     // Die tumble animation
@@ -579,27 +576,24 @@ function rollDie() {
       const tumbleContainer = dieWrapper.parentElement;
       if (tumbleContainer) {
         tumbleContainer.classList.add(dir);
-        // Swap content at midpoint
-        setTimeout(() => generateNightmare(), 325);
+        // Swap content just past the midpoint, while the die is edge-on.
+        setTimeout(() => generateNightmare(), 300);
         setTimeout(() => {
           tumbleContainer.classList.remove(dir);
-          if (container) container.classList.remove('die-shaking');
-          isRolling = false;
+              isRolling = false;
           startDieIdleCycle();
-        }, 650);
+        }, 700);
       } else {
         setTimeout(() => {
           generateNightmare();
-          if (container) container.classList.remove('die-shaking');
-          isRolling = false;
+              isRolling = false;
           startDieIdleCycle();
         }, 325);
       }
     } else {
       setTimeout(() => {
         generateNightmare();
-        if (container) container.classList.remove('die-shaking');
-        isRolling = false;
+          isRolling = false;
       }, 900);
     }
   }
@@ -697,14 +691,24 @@ function renderCards() {
 
   const prev = lastRenderedSnapshot;
   const current = snapshotTraitTexts(buildState);
-  // On first render, don't fizzle anything (the CRT boot handles it).
+  // On first render, don't animate rows (the CRT boot handles it).
   const changedKeys = prev
     ? new Set(Object.keys(current).filter(k => current[k] !== prev[k]))
     : new Set();
 
   renderLogline(changedKeys);
 
-  container.innerHTML = SECTIONS.map(({ key, title, display }) => {
+  // FLIP: remember each card's height so a re-roll that changes text length
+  // glides to the new height instead of jumping the grid.
+  const animateHeights = changedKeys.size > 0 && !prefersReducedMotion();
+  const oldHeights = {};
+  if (animateHeights) {
+    container.querySelectorAll('.card').forEach(card => {
+      oldHeights[card.dataset.section] = card.getBoundingClientRect().height;
+    });
+  }
+
+  container.innerHTML = SECTIONS.map(({ key, display }) => {
     const section = buildState.sections[key];
     const isLocked = section.locked;
     const wantExpanded = typeof manualExpanded[key] === 'boolean' ? manualExpanded[key] : viewMode === 'expanded';
@@ -734,7 +738,7 @@ function renderCards() {
     return `
       <section class="card card-${key}${expandedClass}${lockedClass}" data-section="${key}" aria-labelledby="card-title-${key}">
         <div class="card-header">
-          <h2 class="card-header-title" id="card-title-${key}"><span class="card-header-prefix" aria-hidden="true">&gt;&gt;</span> ${title}</h2>
+          <h2 class="card-header-title" id="card-title-${key}">${display}</h2>
           <div class="card-header-actions">
             <button class="btn-icon" onclick="rerollSection('${key}')" aria-label="Re-roll ${display}" title="${isLocked ? 'Unlock to re-roll' : 'Re-roll this card'}"${isLocked ? ' disabled' : ''}>
               <span class="material-symbols-outlined" aria-hidden="true">casino</span>
@@ -765,19 +769,26 @@ function renderCards() {
     `;
   }).join('');
 
-  // Apply queued card pulses (from section re-rolls). Scoped to just the
-  // specific cards so full-build rolls don't pulse everything.
-  if (pulseAfterRender.size > 0) {
-    pulseAfterRender.forEach(key => {
-      const card = document.querySelector(`.card[data-section="${key}"]`);
-      if (card) {
-        card.classList.remove('card-pulse');
-        void card.offsetWidth;
-        card.classList.add('card-pulse');
-        setTimeout(() => card.classList.remove('card-pulse'), 500);
+  // New rows are dealt in reading order: each visible one gets its place in
+  // the queue (rows inside collapsed cards would only make the rest wait).
+  const visibleEntering = [...container.querySelectorAll('.trait-enter')]
+    .filter(row => !canCollapse || row.closest('.card').classList.contains('expanded'));
+  visibleEntering.forEach((row, i) => row.style.setProperty('--i', i));
+
+  if (animateHeights) {
+    // Read every new height first, then start the animations: one layout.
+    const cards = [...container.querySelectorAll('.card')];
+    const newHeights = cards.map(card => card.getBoundingClientRect().height);
+    cards.forEach((card, i) => {
+      const from = oldHeights[card.dataset.section];
+      const to = newHeights[i];
+      if (from && Math.abs(from - to) > 1) {
+        card.animate(
+          [{ height: `${from}px` }, { height: `${to}px` }],
+          { duration: 360, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+        );
       }
     });
-    pulseAfterRender.clear();
   }
 
   lastRenderedSnapshot = current;
@@ -786,7 +797,7 @@ function renderCards() {
 }
 
 // The logline reads from these state paths. If any of them change between
-// renders the logline re-renders with a fizzle. Other trait changes (e.g.
+// renders the logline animates in again. Other trait changes (e.g.
 // hero trait 2) don't trigger a re-render since they aren't quoted here.
 const LOGLINE_SOURCE_KEYS = [
   'setting:where',
@@ -843,10 +854,10 @@ function renderLogline(changedKeys) {
   container.hidden = false;
 
   if (sourceChanged) {
-    textEl.classList.remove('logline-fizzle');
+    textEl.classList.remove('logline-enter');
     // Force reflow so the animation restarts cleanly.
     void textEl.offsetWidth;
-    textEl.classList.add('logline-fizzle');
+    textEl.classList.add('logline-enter');
     // Announce the updated logline so screen-reader users hear the new
     // stitched-together build without having to re-scan each card.
     if (prevText && prevText !== text) {
@@ -897,7 +908,7 @@ function renderTraitLine(prefix, text, locked, sectionKey, traitType, index, isL
   const snapshotKey = index !== null && index !== undefined
     ? `${sectionKey}:${traitType}:${index}`
     : `${sectionKey}:${traitType}`;
-  const fizzleClass = changedKeys && changedKeys.has(snapshotKey) ? ' trait-fizzle' : '';
+  const enterClass = changedKeys && changedKeys.has(snapshotKey) ? ' trait-enter' : '';
   const lockIcon = held ? 'lock' : 'lock_open';
   const iconClass = held ? ' icon-filled' : '';
   const idxArg = index !== null && index !== undefined ? `,${index}` : '';
@@ -915,7 +926,7 @@ function renderTraitLine(prefix, text, locked, sectionKey, traitType, index, isL
   const lockTitle = sectionLocked ? 'Card is locked' : (locked ? 'Release this' : 'Keep this');
 
   return `
-    <div class="trait-line${lockedClass}${fizzleClass}">
+    <div class="trait-line${lockedClass}${enterClass}">
       ${prefixHtml}
       <span class="trait-text">${escapeHtml(text)}</span>
       <div class="trait-actions">
@@ -967,6 +978,8 @@ function toggleCardExpand(sectionKey) {
   if (!window.matchMedia(COLLAPSE_MQ).matches) return;
   const card = document.querySelector(`.card[data-section="${sectionKey}"]`);
   if (!card) return;
+  // A re-roll may still be gliding this card's height; let the expand win.
+  card.getAnimations().forEach(a => a.cancel());
   const next = !card.classList.contains('expanded');
   manualExpanded = { ...manualExpanded, [sectionKey]: next };
   setCardExpanded(card, next);
@@ -1023,7 +1036,7 @@ function toggleTraitLock(sectionKey, traitType, index) {
   if (willBeLocked) {
     const prefs = loadPrefs();
     if (!prefs.hasSeenLockHint) {
-      showToast("Locked — it'll survive your next roll");
+      showToast("Locked. It'll survive your next roll.");
       savePrefs({ ...prefs, hasSeenLockHint: true });
     }
   }
@@ -1254,8 +1267,8 @@ function wrapLines(ctx, text, maxWidth) {
 function layoutShareImage(ctx, state, scale, colors, draw) {
   const pad = 80;
   const width = SHARE_IMG_W - pad * 2;
-  const mono = '"Space Mono", "Courier New", monospace';
-  const display = '"Space Grotesk", system-ui, sans-serif';
+  const mono = '"Atkinson Hyperlegible Mono", ui-monospace, monospace';
+  const sans = '"Atkinson Hyperlegible Next", system-ui, sans-serif';
   let y = pad;
 
   const text = (str, font, color, x, yy) => {
@@ -1267,24 +1280,23 @@ function layoutShareImage(ctx, state, scale, colors, draw) {
 
   // Title
   const titleSize = Math.round(56 * scale);
-  ctx.font = `700 ${titleSize}px ${display}`;
+  ctx.font = `700 ${titleSize}px ${mono}`;
   y += titleSize;
-  if (draw && 'letterSpacing' in ctx) ctx.letterSpacing = '4px';
-  text('POCKET DYSTOPIA', ctx.font, colors.text, pad, y);
-  if (draw && 'letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  text('Pocket Dystopia', ctx.font, colors.text, pad, y);
+  // The wordmark's amber block cursor.
+  const cursorX = pad + ctx.measureText('Pocket Dystopia').width + Math.round(6 * scale);
+  if (draw) {
+    ctx.fillStyle = colors.accentFill;
+    ctx.fillRect(cursorX, y - titleSize * 0.74, Math.round(titleSize * 0.55), Math.round(titleSize * 0.86));
+  }
   y += Math.round(36 * scale);
 
-  // Logline, with a cyan rule beside it
-  const logSize = Math.round(30 * scale);
-  const logLead = Math.round(logSize * 1.45);
-  ctx.font = `400 ${logSize}px ${mono}`;
-  const logLines = wrapLines(ctx, buildLoglineText(state), width - 28);
-  const logTop = y;
-  logLines.forEach(l => { y += logLead; text(l, `400 ${logSize}px ${mono}`, colors.text, pad + 28, y - logLead * 0.28); });
-  if (draw) {
-    ctx.fillStyle = colors.accent;
-    ctx.fillRect(pad, logTop + 4, 4, y - logTop - 4);
-  }
+  // Logline: the headline of the card, no rule beside it.
+  const logSize = Math.round(32 * scale);
+  const logLead = Math.round(logSize * 1.4);
+  ctx.font = `500 ${logSize}px ${sans}`;
+  const logLines = wrapLines(ctx, buildLoglineText(state), width);
+  logLines.forEach(l => { y += logLead; text(l, `500 ${logSize}px ${sans}`, colors.text, pad, y - logLead * 0.28); });
   y += Math.round(44 * scale);
 
   // Sections
@@ -1292,23 +1304,20 @@ function layoutShareImage(ctx, state, scale, colors, draw) {
   const rowSize = Math.round(25 * scale);
   const rowLead = Math.round(rowSize * 1.45);
   const labelW = Math.round(116 * scale);
-  for (const { key, title } of SECTIONS) {
+  for (const { key, display } of SECTIONS) {
     const color = key === 'hero' ? colors.hero : key === 'villain' ? colors.villain : colors.text;
     y += headSize;
-    ctx.font = `700 ${headSize}px ${mono}`;
-    text('>> ', ctx.font, colors.muted, pad, y);
-    const prefixW = ctx.measureText('>> ').width;
-    text(title, `700 ${headSize}px ${mono}`, color, pad + prefixW, y);
+    text(display, `700 ${headSize}px ${sans}`, color, pad, y);
     y += Math.round(14 * scale);
     for (const [prefix, value] of sectionRows(key, state.sections[key])) {
       const indent = prefix === '>' ? Math.round(36 * scale) : labelW;
-      ctx.font = `400 ${rowSize}px ${mono}`;
+      ctx.font = `400 ${rowSize}px ${sans}`;
       const lines = wrapLines(ctx, value, width - indent);
       y += rowLead;
-      text(prefix, `700 ${Math.round(rowSize * (prefix === '>' ? 1 : 0.78))}px ${mono}`, colors.muted, pad, y - rowLead * 0.28);
+      text(prefix, `700 ${Math.round(rowSize * (prefix === '>' ? 1 : 0.78))}px ${mono}`, prefix === '>' ? colors.accent : colors.muted, pad, y - rowLead * 0.28);
       lines.forEach((l, i) => {
         if (i > 0) y += rowLead;
-        text(l, `400 ${rowSize}px ${mono}`, colors.text, pad + indent, y - rowLead * 0.28);
+        text(l, `400 ${rowSize}px ${sans}`, colors.text, pad + indent, y - rowLead * 0.28);
       });
     }
     y += Math.round(30 * scale);
@@ -1321,13 +1330,15 @@ async function renderShareImage(state) {
   const v = name => css.getPropertyValue(name).trim();
   const colors = {
     bg: v('--bg-primary'), text: v('--text-primary'), muted: v('--text-tertiary'),
-    accent: v('--accent-cyan'), hero: v('--accent-hero'), villain: v('--accent-villain'),
+    accent: v('--accent-ink'), accentFill: v('--accent'), hero: v('--accent-hero'), villain: v('--accent-villain'),
   };
   if (document.fonts?.load) {
     await Promise.all([
-      document.fonts.load('400 25px "Space Mono"'),
-      document.fonts.load('700 25px "Space Mono"'),
-      document.fonts.load('700 56px "Space Grotesk"'),
+      document.fonts.load('700 56px "Atkinson Hyperlegible Mono"'),
+      document.fonts.load('400 22px "Atkinson Hyperlegible Mono"'),
+      document.fonts.load('400 25px "Atkinson Hyperlegible Next"'),
+      document.fonts.load('500 32px "Atkinson Hyperlegible Next"'),
+      document.fonts.load('700 26px "Atkinson Hyperlegible Next"'),
     ]).catch(() => {});
   }
   const canvas = document.createElement('canvas');
@@ -1343,7 +1354,7 @@ async function renderShareImage(state) {
   ctx.fillStyle = colors.bg;
   ctx.fillRect(0, 0, SHARE_IMG_W, SHARE_IMG_H);
   layoutShareImage(ctx, state, scale, colors, true);
-  ctx.font = '400 22px "Space Mono", monospace';
+  ctx.font = '400 22px "Atkinson Hyperlegible Mono", monospace';
   ctx.fillStyle = colors.muted;
   ctx.fillText(location.host || 'pocketdystopia.forhuman.ca', 80, SHARE_IMG_H - 56);
   return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -1672,7 +1683,7 @@ async function shareViaWebShareApi() {
   const url = buildShareUrl(buildState);
   try {
     await navigator.share({
-      title: 'Pocket Dystopia — my build',
+      title: 'Pocket Dystopia: my build',
       text: buildLoglineText(buildState),
       url,
     });
@@ -2336,23 +2347,24 @@ function presentRowMeta(key, section) {
   return meta;
 }
 
-function presentSectionHtml(key, title, section, changedKeys) {
+function presentSectionHtml(key, title, section, changedKeys, order) {
   const meta = presentRowMeta(key, section);
   const rows = sectionRows(key, section).map(([prefix, text], i) => {
     const [snapKey, locked] = meta[i];
-    const changed = changedKeys?.has(snapKey) ? ' present-fizzle' : '';
+    const changed = changedKeys?.has(snapKey) ? ' present-enter' : '';
+    const delay = changed ? ` style="--i:${order.next++}"` : '';
     const held = locked || section.locked ? ' present-held' : '';
     const label = prefix === '>'
       ? '<span class="present-prefix" aria-hidden="true">&gt;</span>'
       : `<span class="present-label">${escapeHtml(prefix)}</span>`;
-    return `<li class="present-row${changed}${held}">${label}<span>${escapeHtml(text)}</span></li>`;
+    return `<li class="present-row${changed}${held}"${delay}>${label}<span>${escapeHtml(text)}</span></li>`;
   }).join('');
   const lock = section.locked
     ? ' <span class="material-symbols-outlined icon-filled present-lock" aria-label="locked">lock</span>'
     : '';
   return `
     <section class="present-card present-card-${key}${section.locked ? ' present-card-locked' : ''}">
-      <h2 class="present-card-title"><span aria-hidden="true">&gt;&gt;</span> ${title}${lock}</h2>
+      <h2 class="present-card-title">${title}${lock}</h2>
       <ul class="present-rows">${rows}</ul>
     </section>`;
 }
@@ -2361,11 +2373,12 @@ function renderPresent(changedKeys) {
   const inner = document.getElementById('present-inner');
   if (!inner || !buildState) return;
   const logChanged = changedKeys && LOGLINE_SOURCE_KEYS.some(k => changedKeys.has(k));
+  const order = { next: logChanged ? 1 : 0 };
   inner.innerHTML = `
-    <p class="present-brand">POCKET DYSTOPIA</p>
-    <p class="present-logline${logChanged ? ' present-fizzle' : ''}">${escapeHtml(buildLoglineText(buildState))}</p>
+    <p class="present-brand">Pocket Dystopia</p>
+    <p class="present-logline${logChanged ? ' present-enter' : ''}">${escapeHtml(buildLoglineText(buildState))}</p>
     <div class="present-grid">
-      ${SECTIONS.map(({ key, title }) => presentSectionHtml(key, title, buildState.sections[key], changedKeys)).join('')}
+      ${SECTIONS.map(({ key, display }) => presentSectionHtml(key, display, buildState.sections[key], changedKeys, order)).join('')}
     </div>`;
   fitPresent();
 }
@@ -2436,9 +2449,9 @@ function buildPrintSheetHtml(state) {
     `Obstacle: ${s.obstacles.traits[0].text}. How do they get past it?`,
     'The ending. Does the hero win, lose, or something stranger? Use the hero\'s weakness.',
   ];
-  const sectionsHtml = SECTIONS.map(({ key, title }) => `
+  const sectionsHtml = SECTIONS.map(({ key, display }) => `
     <div class="ws-section">
-      <h3>${title}</h3>
+      <h3>${display}</h3>
       <ul>${sectionRows(key, s[key]).map(([p, t]) => `<li>${p === '>' ? '' : `<b>${escapeHtml(p)}</b> `}${escapeHtml(t)}</li>`).join('')}</ul>
     </div>`).join('');
   return `
@@ -2650,6 +2663,11 @@ function initShortcuts() {
     }
 
     const key = e.key;
+
+    // A held key auto-repeats; a shortcut fires once per press. (Holding Z
+    // would otherwise drain the undo history, and held keys re-render
+    // faster than new rows can arrive.)
+    if (e.repeat) return;
 
     // `?` always works (even with modals open), and Escape is handled elsewhere.
     if (key === '?' && !isPresenting()) {
