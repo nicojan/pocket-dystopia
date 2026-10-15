@@ -78,7 +78,6 @@
   --stagger: 28ms;
   /* Phosphor afterglow: changed text lands lit in amber and decays. */
   --dur-glow: 1400ms;
-  --glow-bg: rgba(255, 178, 36, 0.16);
   --glow-shadow: 0 0 10px rgba(255, 178, 36, 0.55);
 }
 
@@ -99,9 +98,8 @@
   --accent-red-muted: #A12C1E;
   --accent-red-tint: rgba(188, 54, 38, 0.08);
   --on-destructive: #FFFFFF;
-  /* On paper a text glow just smudges; the highlighter wash carries it. */
-  --glow-bg: rgba(242, 165, 22, 0.2);
-  --glow-shadow: none;
+  /* On paper the halo is tighter and fainter, or it smudges. */
+  --glow-shadow: 0 0 6px rgba(242, 165, 22, 0.45);
   --accent-green: #2A7537;
   --accent-hero: #2A7537;
   --accent-villain: #BC3626;
@@ -868,9 +866,9 @@ body {
    New text is dealt in, row by row in reading order: a short fade and a
    4px rise, staggered by --i (set in renderCards). One gesture for the
    logline, the traits and the present view. Then it glows: like text on an
-   amber CRT, a changed row lands lit (amber wash, amber text, a soft halo
-   in dark) and decays back to normal over --dur-glow, so a change is hard
-   to miss without anything flashing. */
+   amber CRT, changed text lands lit (amber, with a soft halo) and decays
+   back to normal over --dur-glow, so a change is hard to miss without
+   anything flashing. Text only; no box around the row. */
 @keyframes text-enter {
   from {
     opacity: 0;
@@ -884,23 +882,11 @@ body {
 
 /* Holds lit for the first ~20%, then decays to the element's own colours
    (no closing keyframe, so it always lands on the real value). */
-@keyframes row-afterglow {
-  0%, 18% { background-color: var(--glow-bg); }
-}
-
 @keyframes text-afterglow {
   0%, 18% {
     color: var(--accent-ink);
     text-shadow: var(--glow-shadow);
   }
-}
-
-/* No fill: the wash lights up on the row's turn, together with its text,
-   never as an empty bar while the row waits. */
-.trait-enter,
-.present-row.present-enter {
-  animation: row-afterglow var(--dur-glow) var(--ease-out);
-  animation-delay: calc(var(--i, 0) * var(--stagger));
 }
 
 .trait-enter .trait-text,
@@ -929,12 +915,6 @@ body {
 /* Reduced motion: no rise, but keep the afterglow. It is a colour fade,
    not movement, and it is how you see what changed. */
 @media (prefers-reduced-motion: reduce) {
-  .trait-enter,
-  .present-row.present-enter {
-    animation: row-afterglow var(--dur-glow) var(--ease-out) !important;
-    animation-delay: 0s !important;
-  }
-
   .trait-enter .trait-text,
   .trait-enter .trait-label,
   .present-row.present-enter > span:last-child,
@@ -2296,7 +2276,7 @@ kbd {
 .present-row {
   display: flex;
   gap: 0.45em;
-  /* Room for the held tint and the afterglow wash, with no layout shift. */
+  /* Room for the held tint, with no layout shift. */
   border-radius: 0.2em;
   padding-inline: 0.3em;
   margin-inline: -0.3em;
