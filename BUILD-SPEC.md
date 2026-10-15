@@ -1,8 +1,8 @@
 # Pocket Dystopia — Build Specification
 
-> A satirical dystopian story-seed generator. Roll a die to randomize a hero, villain, squad, setting, and obstacles. Lock what you like, re-roll the rest, share the result via a link. Elementary-school-safe humor with a CRT/terminal aesthetic.
+> A satirical dystopian story-seed generator. Roll a die to randomize a hero, villain, squad, setting, and obstacles. Lock what you like, re-roll the rest, share the result via a link. Elementary-school-safe humor with an amber-phosphor terminal aesthetic.
 >
-> This document describes the **current implemented build** (revision 2: the UX-audit pass, plus the present view, printable worksheet, expanded trait pools and automated tests; see [`UX-AUDIT-2026-10-13.md`](UX-AUDIT-2026-10-13.md) for the audit findings). For the original pre-implementation design intent, see [`spec.md`](spec.md).
+> This document describes the **current implemented build** (revision 2: the UX-audit pass, plus the present view, printable worksheet, expanded trait pools and automated tests; see [`UX-AUDIT-2026-10-13.md`](UX-AUDIT-2026-10-13.md) for the audit findings) with the 2026-10-14 visual and motion redesign applied on top (palette, type, lock rendering and motion system, §6 and §7; rationale in [`VISUAL-AUDIT-2026-10-14.md`](VISUAL-AUDIT-2026-10-14.md)). For the original pre-implementation design intent, see [`spec.md`](spec.md).
 
 ---
 
@@ -24,18 +24,19 @@
 ```
 Pocket Dystopia/
 ├── index.html        # ~380 lines. Markup: intro + results screens, phone action bar, 4 modals, present view, print worksheet, toast, sr-only announcer, credit footer
-├── styles.css        # ~2660 lines: tokens, components, animations, responsive, a11y, present view, print
+├── styles.css        # ~2440 lines: tokens, components, animations, responsive, a11y, present view, print
 ├── data.js           # ~320 lines. Trait pools (28–34 per pool), tagged with mood categories. APPEND-ONLY (see §3.1)
-├── app.js            # ~2810 lines: state, rolling, rendering, validation, share codes, share image, pins, present view, worksheet, shortcuts, modal focus, a11y
+├── app.js            # ~2850 lines: state, rolling, rendering, validation, share codes, share image, pins, present view, worksheet, shortcuts, modal focus, a11y
 ├── manifest.webmanifest  # Web app manifest (name, colours, 192/512 icons, standalone)
 ├── wrangler.toml     # Cloudflare Workers static-assets deploy config
 ├── spec.md           # Original pre-build design spec (historical)
 ├── BUILD-SPEC.md     # This document
 ├── UX-AUDIT-2026-10-13.md  # The 27-finding UX audit and the fix chosen for each
+├── VISUAL-AUDIT-2026-10-14.md  # The visual and motion audit: why the palette, type, lock and motion changed
 ├── favicon.ico, favicon-16.png, favicon-32.png
 ├── icon-192.png, icon-512.png, apple-touch-icon.png
-├── og-image-v3.png   # 1200×630 Open Graph image (rendered from tools/og-image.html)
-├── tools/            # og-image.html + render-og.mjs (not served)
+├── og-image-v4.png   # 1200×630 Open Graph image (rendered from tools/og-image.html). (v3 retired and removed)
+├── tools/            # og-image.html + render-og.mjs, icon.html + render-icons.mjs (not served)
 ├── tests/            # Playwright e2e suite, own package.json (not served; see §14)
 └── .github/workflows/test.yml  # Runs the suite on push and PRs
 ```
@@ -47,8 +48,8 @@ Pocket Dystopia/
 | Layer | Choice | Notes |
 |---|---|---|
 | Markup / logic | Vanilla HTML + JS (no framework) | Two `<script>` tags: `data.js`, then `app.js` |
-| Styling | Plain CSS with custom properties | Dark mode default; `[data-theme="light"]` override |
-| Fonts | `Space Grotesk` (display), `Space Mono` (body) via Google Fonts | Loaded via stylesheet `<link>` |
+| Styling | Plain CSS with custom properties | Dark mode default; `[data-theme="light"]` override. `setThemeAttr()` also keeps `<meta name="theme-color">` in step with the theme |
+| Fonts | `Atkinson Hyperlegible Next` (body, Human's web body face) and `Atkinson Hyperlegible Mono` (terminal scaffolding) via Google Fonts | Loaded via stylesheet `<link>`, with `preconnect` hints to `fonts.googleapis.com` and `fonts.gstatic.com`. See §6.5 |
 | Icons | Material Symbols Outlined via Google Fonts, requested as an `icon_names` subset (~5 KB instead of ~4 MB) | Axes pinned to what the CSS uses: `opsz 24, wght 300, FILL 0..1, GRAD 0`. `display=block` so ligature names never flash as text |
 | Share image | Native `<canvas>` 2D drawing | No library. See §4.10 |
 | Persistence | `localStorage` | Three keys: `pocket-dystopia-state`, `pocket-dystopia-prefs`, `pocket-dystopia-pins` |
@@ -57,7 +58,9 @@ Pocket Dystopia/
 ### CDN links (from `index.html`)
 
 ```html
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;700&family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0..1,0&icon_names=add,arrow_forward,back_hand,casino,check,chevron_right,close,content_copy,dark_mode,delete,download,edit,expand_more,keyboard,light_mode,link,lock,lock_open,more_vert,push_pin,replay,share,tune,undo,upload,vibration&display=block" rel="stylesheet">
 <link rel="manifest" href="manifest.webmanifest">
 ```
@@ -182,7 +185,7 @@ Six fixed slots. Label defaults to the hero's first trait, sentence-cased and tr
 Four entry points, all funnelling through `rollDie()`:
 
 1. **Intro-screen die** (`onclick="rollDie()"` on `#die-container`). First roll triggers CRT-boot animation on the results container.
-2. **Roll button on the results screen.** Above 600 px it is the primary pill in the top bar with a cycling d6 icon and a visible "Roll" label. At 600 px and below it moves to the bottom action bar (§5.3). Plays a tumble animation; swaps content at animation midpoint (325 ms).
+2. **Roll button on the results screen.** Above 600 px it is the primary pill in the top bar with a cycling d6 icon and a visible "Roll" label. At 600 px and below it moves to the bottom action bar (§5.3). Plays a tumble animation (§7); swaps content at 300 ms, just past the midpoint, while the die is edge-on.
 3. **Shake-to-roll** on touch devices with `DeviceMotionEvent`, controlled by a More-menu toggle (see §10.3). Threshold 15 m/s² on any axis, cooldown 1 s, ignored while a modal is open.
 4. **Keyboard shortcut** `R` on the results screen.
 
@@ -262,7 +265,7 @@ In {setting.where}, {setting.when}.
 
 Trait text is stored lowercase for list use, so each stitched sentence is sentence-cased (first letter capitalised, a closing full stop added unless it already ends in `.`, `!`, `?` or `…`). The source data is untouched.
 
-Derived from 6 state keys listed in `LOGLINE_SOURCE_KEYS`. The logline re-renders on every `renderCards()` but only plays the fizzle animation when one of those source keys changed since the last render. A "Copy logline" button beside the logline box writes the plain text to clipboard.
+Derived from 6 state keys listed in `LOGLINE_SOURCE_KEYS`. The logline re-renders on every `renderCards()` but only plays the `logline-enter` animation (§7) when one of those source keys changed since the last render. A "Copy logline" button beside the logline writes the plain text to clipboard. The logline is the page's headline, not a callout: no box, no left rule, 19 to 23 px at weight 500 (`clamp(1.1875rem, 1rem + 0.6vw, 1.4375rem)`), `max-width: 62ch`.
 
 Source-key changes are announced via the sr-only live region so screen-reader users hear the new stitched sentence without re-scanning each card.
 
@@ -282,7 +285,7 @@ Six fixed slots, opened from the top-bar pin icon.
 
 ### 4.9 Copy build (plain text)
 
-`formatBuildText()` emits a terminal-style layout: header, the logline, the five sections in display order (`SECTIONS`), then the share URL:
+`formatBuildText()` emits a terminal-style layout. It is the one place the caps `title` of `SECTIONS` ("THE SETTING") and the `>>` prefix survive; everywhere visual (cards, present view, share image, worksheet) uses the title-case `display` ("The Setting"): header, the logline, the five sections in display order (`SECTIONS`), then the share URL:
 
 ```
 POCKET DYSTOPIA - Story Seed
@@ -313,8 +316,8 @@ TRAUMA: <trauma>
 
 `saveScreenshot()` (the share modal's "Save as image") draws a purpose-made **1080×1350** PNG on a `<canvas>`. No library and no screenshot of the UI, so the output is identical on every device.
 
-- `renderShareImage(state)` reads the current theme's colour tokens, waits for the fonts (`document.fonts.load`), fills the background, and calls `layoutShareImage()` twice: first as a measuring pass that shrinks the type scale (down to 0.6×) until everything fits above a 90 px footer, then as the drawing pass.
-- `layoutShareImage()` lays out the "POCKET DYSTOPIA" title, the logline with a cyan rule beside it, then the five sections in display order (Hero green, Villain red, others in the primary text colour), each row wrapped with `wrapLines()`. The footer is the host name.
+- `renderShareImage(state)` reads the current theme's colour tokens (`--accent-ink` for the `>` prompts, `--accent` for the cursor block), waits for the Atkinson fonts (`document.fonts.load`), fills the background, and calls `layoutShareImage()` twice: first as a measuring pass that shrinks the type scale (down to 0.6×) until everything fits above a 90 px footer, then as the drawing pass.
+- `layoutShareImage()` lays out the "Pocket Dystopia" wordmark in Atkinson Hyperlegible Mono with the amber block cursor drawn after it, the logline (Atkinson Next 500, no rule beside it), then the five sections in display order with their title-case `display` names (Hero green, Villain red, others in the primary text colour). Rows are Atkinson Next with the `>` prompts in accent ink and the WEAK/TRAUMA/WHEN/WHERE labels muted, each wrapped with `wrapLines()`. The footer is the host name in Atkinson Mono.
 - On coarse pointers where `navigator.canShare({ files })` is true, the image goes to the share sheet (so it can reach Photos); cancelling is silent. Otherwise it downloads as `pocket-dystopia-<timestamp>.png` with an "Image saved" toast. Failures toast "Couldn't make the image" or "Couldn't share the image".
 
 ### 4.11 Reset
@@ -325,15 +328,15 @@ TRAUMA: <trauma>
 - Leaves `pocket-dystopia-prefs` and `pocket-dystopia-pins` intact
 - Returns to intro
 
-The "POCKET DYSTOPIA" title in the top bar (a button labelled "Pocket Dystopia, back to start", so the accessible name contains the visible text) is **non-destructive**: it opens the intro with the build state preserved. If a saved build exists, the intro shows a resume row under the die: "You have a build in progress. [Resume] [Clear it]".
+The "Pocket Dystopia" title in the top bar (a button labelled "Pocket Dystopia, back to start", so the accessible name contains the visible text) is **non-destructive**: it opens the intro with the build state preserved. If a saved build exists, the intro shows a resume row under the die: "You have a build in progress. [Resume] [Clear it]".
 
 ### 4.12 Present view (classroom screen)
 
-`openPresent()` (More → "Present to class", or `F`) opens `#present-view`, a full-screen large-type rendering of the current build: brand line, the logline in large type with a cyan rule, then the five sections (Setting full width with WHEN/WHERE side by side, then Hero, Villain, Squad, Obstacles in four columns, two between 761 and 1100 px). It requests browser fullscreen; leaving fullscreen (the browser swallows Esc there) also closes the view via `fullscreenchange`. Type is sized from the viewport (`clamp(15px, 1.25vw + 0.9vh, 40px)` × `--present-scale`) and `fitPresent()` lowers the scale in 0.05 steps (floor 0.45) until nothing overflows; at ≤ 760 px it stacks to one column and scrolls instead of shrinking. Roll / Undo / Exit controls sit bottom-right at 55% opacity (full on hover/focus, always full on touch). While presenting only `R`/Space (roll; Space is left to a focused button), PageDown/→ (roll) and PageUp/← (undo) for presentation clickers, `Z` (undo), `1`–`5` (re-roll a card), `F` and Esc (exit) work; every other shortcut, `?` included, is blocked. Opening it closes the More menu and puts focus on Roll. Locked cards show an amber lock after the title and held rows an amber left rule. Only rows whose own text changed replay the fizzle. It goes through `openModal()`/`closeModal()`, so focus is trapped inside and restored on exit. `renderCards()` re-renders it whenever the build changes; changed sections replay the logline fizzle.
+`openPresent()` (More → "Present to class", or `F`) opens `#present-view`, a full-screen large-type rendering of the current build: brand line, the logline in large type (no rule), then the five sections (Setting full width with WHEN/WHERE side by side, then Hero, Villain, Squad, Obstacles in four columns, two between 761 and 1100 px). It requests browser fullscreen; leaving fullscreen (the browser swallows Esc there) also closes the view via `fullscreenchange`. Type is sized from the viewport (`clamp(15px, 1.25vw + 0.9vh, 40px)` × `--present-scale`) and `fitPresent()` lowers the scale in 0.05 steps (floor 0.45) until nothing overflows; at ≤ 760 px it stacks to one column and scrolls instead of shrinking. Roll / Undo / Exit controls sit bottom-right at 55% opacity (full on hover/focus, always full on touch). While presenting only `R`/Space (roll; Space is left to a focused button), PageDown/→ (roll) and PageUp/← (undo) for presentation clickers, `Z` (undo), `1`–`5` (re-roll a card), `F` and Esc (exit) work; every other shortcut, `?` included, is blocked. Opening it closes the More menu and puts focus on Roll. Titles use the title-case `display` name with no `>>`. Locked cards show a filled lock in lock ink after the title; held rows (locked trait, or any row of a locked card) get a `--lock-tint` background instead of a left rule. Only rows whose own text changed play `present-enter`, staggered in reading order by `--i` (`presentSectionHtml()` hands out the indices, the logline counting first when it changed). It goes through `openModal()`/`closeModal()`, so focus is trapped inside and restored on exit. `renderCards()` re-renders it whenever the build changes; a changed logline plays `present-enter`.
 
 ### 4.13 Printable worksheet
 
-`printWorksheet()` (More → "Print worksheet") fills `#print-sheet` from the build and calls `window.print()`; a `beforeprint` listener does the same for Cmd/Ctrl+P. With a build on the results screen (not the intro), `html.has-print-sheet` makes `@media print` hide everything except the sheet; without one the page prints as-is. The sheet, black on white in Space Mono / Space Grotesk: title with Name and Date blanks, the logline, the five sections in two columns, then "Your turn" with six prompts (each with four ruled lines) that quote the build: describe the setting with three senses, introduce the hero by showing their first trait, the hero meets the villain, the squad arrives, get past the first obstacle, an ending that uses the hero's weakness. The footer carries the build's share URL so the class can reopen the exact seed. Prompts are built in `buildPrintSheetHtml()`; all build text goes through `escapeHtml()`.
+`printWorksheet()` (More → "Print worksheet") fills `#print-sheet` from the build and calls `window.print()`; a `beforeprint` listener does the same for Cmd/Ctrl+P. With a build on the results screen (not the intro), `html.has-print-sheet` makes `@media print` hide everything except the sheet; without one the page prints as-is. The sheet, black on white in Atkinson Hyperlegible Next (the title line in Atkinson Mono): the "Pocket Dystopia · Story seed" title with Name and Date blanks, the logline (no left rule), the five sections in two columns under title-case headings ("The Setting", "The Hero"…), then "Your turn" with six prompts (each with four ruled lines) that quote the build: describe the setting with three senses, introduce the hero by showing their first trait, the hero meets the villain, the squad arrives, get past the first obstacle, an ending that uses the hero's weakness. The footer carries the build's share URL so the class can reopen the exact seed. Prompts are built in `buildPrintSheetHtml()`; all build text goes through `escapeHtml()`.
 
 ---
 
@@ -350,9 +353,9 @@ Rendering is imperative: `showResults()` and `showIntro()` toggle the classes an
 
 ### 5.2 Intro screen
 
-- `h1.text-display` title "POCKET DYSTOPIA" in `--text-primary` with a cyan glow halo.
+- `h1.text-display` wordmark "Pocket Dystopia" (title case, Atkinson Mono) in `--text-primary`, followed by a static amber block cursor (`.wordmark-cursor`, `aria-hidden`, filled with `--accent`). No glow or text-shadow.
 - 2-line subtitle: "Roll a satirical dystopian seed. / Lock what you love, re-roll the rest."
-- Tappable die (`#die-container`, `role="button"`) with pip-based SVG face. Idle cycle animates face swaps every 600 ms. `aria-label="Roll the die"`; the visible hint ("tap to roll" on touch, "click to roll" on pointer+hover) is `aria-hidden`.
+- Tappable die (`#die-container`, `role="button"`) with pip-based SVG face. Idle cycle swaps faces every 600 ms with no effect (the die floats 4 px over 4 s; §7). `aria-label="Roll the die"`; the visible hint ("tap to roll" on touch, "click to roll" on pointer+hover) is `aria-hidden`.
 - Conditional resume row (visible iff `pocket-dystopia-state` exists): "You have a build in progress. [Resume] [Clear it]".
 - Collapsible "Have a build code?" disclosure — collapsed by default, expands inline to reveal input + Load button. Autofocuses the input on expand. The input ("Paste a link or code…") accepts a full share link or a bare code; Enter loads. An error reads "That code didn't work. Paste the whole link or code exactly as it was shared." Loading over an existing build is undoable.
 - Footer credit line with heart and outbound link: an ordinary `<footer class="forhuman-credit">` in the document flow (never fixed). The intro's min-height leaves room for it.
@@ -361,7 +364,7 @@ Rendering is imperative: `showResults()` and `showIntro()` toggle the classes an
 
 **Top bar** (`.top-bar`, sticky), in natural reading order in both handedness modes:
 
-1. "POCKET DYSTOPIA" title button (`aria-label="Pocket Dystopia, back to start"`): non-destructive, opens the intro without clearing state. Shown at every width (smaller on phones), so there is no separate home icon.
+1. "Pocket Dystopia" title button (mono, no cursor) (`aria-label="Pocket Dystopia, back to start"`): non-destructive, opens the intro without clearing state. Shown at every width (smaller on phones), so there is no separate home icon.
 2. Undo (`disabled` until history is non-empty; the floating "Undo" label is described in §4.4). Hidden at ≤ 600 px, where Undo lives in the action bar.
 3. Share (opens the export hub modal).
 4. Pinned builds (opens the pinned panel).
@@ -374,8 +377,8 @@ On phones (≤ 600 px) the top bar therefore shows only the title plus share, pi
 
 **Controls bar** (below top bar):
 
-- Custom mood combobox (replaces native `<select>`): button + listbox with full ARIA (combobox/listbox/option), arrow-key navigation, cyan checkmark on the selected option. Capped at 280 px width on desktop; takes the full row at ≤ 480 px.
-- View toggle (Expanded / Compressed): demoted visually: smaller, outlined, 12 pt uppercase. Shown below 1024 px (phones and tablets); hidden at ≥ 1024 px.
+- Custom mood combobox (replaces native `<select>`): button + listbox with full ARIA (combobox/listbox/option), arrow-key navigation, amber (`--accent-ink`) checkmark on the selected option. Capped at 280 px width on desktop; takes the full row at ≤ 480 px.
+- View toggle (Expanded / Compressed): demoted visually: smaller, outlined, 13 px at weight 600, sentence case. Shown below 1024 px (phones and tablets); hidden at ≥ 1024 px.
 
 **Logline**: renders between the controls bar and the cards grid, above the first card. See §4.7.
 
@@ -387,13 +390,12 @@ On phones (≤ 600 px) the top bar therefore shows only the title plus share, pi
 
 Each card:
 
-- Header: plain `<h2>` title `>> <TITLE>` with the `>>` as aria-hidden `--text-tertiary` decoration. Title color: Hero green, Villain red, others `--text-primary`.
-- Role-coded 2 px top stripe (Hero green, Villain red). Others plain.
+- Header: plain `<h2>` with the title-case `display` name ("The Setting", "The Hero", "The Villain", "The Squad", "Obstacles"), 20 px at weight 700, no `>>` prefix. Title color: Hero green, Villain red, others `--text-primary`. Role is carried by the heading colour alone; there are no top stripes.
 - Action strip (consistent order at both levels): **re-roll → lock → chevron (below 1024 px only)**.
 - Summary line (visible only when collapsed): the first trait in full (the `where` for Setting), then a muted "+N more" counting the hidden rows. No trailing ellipsis.
-- Body: a list of `.trait-line` rows. Each row has either a `>` prefix or a `WEAK` / `TRAUMA` / `WHEN` / `WHERE` label (all `--text-secondary`), the trait text, and a per-trait action group (swap + lock).
-- Locking a card paints an amber ring + soft glow, and every trait inside it renders as held (amber left border, filled lock, swap and lock buttons disabled; see §4.3). Locking a trait paints an amber 2 px left border on the row.
-- Per-trait action buttons: always visible at a legible tertiary colour on `hover: none` devices. On hover-capable fine pointers they rest at 45 % opacity and go to full on row hover or focus. A locked trait's lock stays full-strength amber. Swap uses the `replay` icon; lock uses `lock_open` / `lock`.
+- Body: a list of `.trait-line` rows. Each row has either a `>` prompt (Atkinson Mono, bold, `--accent-ink`) or a `WEAK` / `TRAUMA` / `WHEN` / `WHERE` label (Atkinson Mono, bold, caps with no letter-spacing, 13 px, `--text-secondary`), the trait text, and a per-trait action group (swap + lock).
+- Lock is neutral, not amber (amber means "act"). Locking a trait gives its row a filled lock icon and a flat `--lock-tint` background. Locking a card switches its border to `--lock-border` and fills the card's lock icon (`--lock-ink`); every trait inside renders as held (filled lock, swap and lock buttons disabled; see §4.3) but its row is not tinted, so tints don't stack inside a card that already says "held". No ring, glow or coloured edge anywhere.
+- Per-trait action buttons: always visible at a legible tertiary colour on `hover: none` devices. On hover-capable fine pointers they rest at 45 % opacity and go to full on row hover or focus. A locked trait's lock stays full strength in lock ink. Swap uses the `replay` icon; lock uses `lock_open` / `lock`.
 
 Cards are collapsible below 1024 px (phones and tablets), the same breakpoint at which the view toggle is shown, via the chevron button. At ≥ 1024 px every card is always expanded and the chevron is hidden. Collapsing animates `grid-template-rows` from `0fr` to `1fr` rather than a `max-height`, so tall cards at 320 px are never clipped, and collapsed content is `inert` so its buttons leave the tab order and the accessibility tree.
 
@@ -430,36 +432,49 @@ Arrow-key navigation, Home/End, Escape to close, click outside to close. `aria-h
 
 ### 6.1 Color tokens
 
-**Dark (default)** — from `:root` in `styles.css`:
+One chosen look: an amber-phosphor terminal on warm near-black (dark, default) or warm paper (light). Amber is the single accent and means "act": the Roll button, focus rings, the `>` prompt, the die and the wordmark cursor. Lock is deliberately neutral so it never competes with Roll. Rationale: [`VISUAL-AUDIT-2026-10-14.md`](VISUAL-AUDIT-2026-10-14.md). The earlier GitHub-Primer dark and Tailwind light palettes, and the `--accent-cyan*`, `--accent-lock*`, `--accent-amber*` and `--border-accent` tokens, no longer exist.
 
-| Token | Value | Role |
-|---|---|---|
-| `--bg-primary` | `#080A0D` | Page background |
-| `--bg-secondary` | `#0D1117` | Card surface |
-| `--bg-elevated` | `#161B22` | Inputs, modal, elevated buttons |
-| `--bg-overlay` | `#1E2329` | Hover surface |
-| `--text-primary` | `#E6EDF3` | Body text |
-| `--text-secondary` | `#8B949E` | Muted text, data labels (WEAK, TRAUMA, WHEN, WHERE) |
-| `--text-tertiary` | `#737B85` | Very muted (bumped from `#4A5568` for WCAG AA) |
-| `--text-inverse` | `#080A0D` | Text on cyan buttons |
-| `--accent-cyan` | `#00E5FF` | **CTA-only**: Roll pill, focus outlines, menu checkmarks, primary modal buttons |
-| `--accent-hero` | `#4ADE80` | Hero heading + top stripe |
-| `--accent-villain` | `#FF4D4D` | Villain heading + top stripe, destructive actions, errors, heart glyph |
-| `--accent-amber` | `#FFB020` | Reserved (was used for data labels; now none) |
-| `--accent-lock` | `#FFB020` | Lock state (amber, framed as "held / preserved") |
-| `--accent-lock-glow` | `rgba(255, 176, 32, 0.35)` | Lock ring halo |
-| `--border-default` | `#30363D` | Default borders |
-| `--border-subtle` | `#21262D` | Subtle dividers |
-| `--border-accent` | `#00E5FF` | Focus / accent borders |
+All values below are from `:root` and `[data-theme="light"]` in `styles.css`.
 
-**Light (`[data-theme="light"]`)**: lighter bg palette, `#0891B2` cyan, `#16A34A` hero, `#DC2626` villain, `#D97706` lock amber.
+| Token | Dark (`:root`) | Light | Role |
+|---|---|---|---|
+| `--bg-primary` | `#0F0E0C` | `#F5F2EA` | Page ground (paper in light) |
+| `--bg-secondary` | `#171613` | `#FFFDF8` | Card surface |
+| `--bg-elevated` | `#1E1C18` | `#FFFFFF` | Inputs, modal, elevated buttons |
+| `--bg-overlay` | `#28251F` | `#ECE7DC` | Hover surface, floating Undo pill |
+| `--text-primary` | `#EEE8DD` | `#1E1C18` | Body text |
+| `--text-secondary` | `#ABA396` | `#5B544A` | Muted text, data labels (WEAK, TRAUMA, WHEN, WHERE) |
+| `--text-tertiary` | `#968E81` | `#6B6458` | Very muted |
+| `--text-inverse` | `#0F0E0C` | `#FFFFFF` | Inverse text (defined, not currently referenced by `styles.css`) |
+| `--accent` | `#FFB224` | `#F2A516` | Fill: Roll button, die, wordmark cursor |
+| `--accent-hover` | `#FFC456` | `#E39710` | Hover fill |
+| `--accent-ink` | `#FFB224` | `#8F5400` | Amber as text, icons, focus rings, the `>` prompt, menu and listbox checkmarks |
+| `--on-accent` | `#0F0E0C` | `#1E1C18` | Text and icons on an amber fill |
+| `--accent-red` | `#FF7B67` | `#BC3626` | Destructive actions, errors |
+| `--accent-red-muted` | `#E5604C` | `#A12C1E` | Muted red |
+| `--accent-red-tint` | `rgba(255, 123, 103, 0.1)` | `rgba(188, 54, 38, 0.08)` | Red wash |
+| `--on-destructive` | `#0F0E0C` | `#FFFFFF` | Text on `.btn-destructive` (7.6:1 dark, 5.7:1 light) |
+| `--accent-green` | `#7FD48B` | `#2A7537` | Success (copy check) |
+| `--accent-hero` | `#7FD48B` | `#2A7537` | Hero heading |
+| `--accent-villain` | `#FF7B67` | `#BC3626` | Villain heading |
+| `--lock-ink` | `#EEE8DD` | `#1E1C18` | Lock icon (filled when held) |
+| `--lock-tint` | `rgba(238, 232, 221, 0.07)` | `rgba(30, 28, 24, 0.055)` | Locked row background; present view held rows |
+| `--lock-border` | `#6A6357` | `#A39B8D` | Locked card border |
+| `--border-default` | `#322E27` | `#DDD5C7` | Default borders |
+| `--border-subtle` | `#25221D` | `#E8E2D6` | Subtle dividers |
+| `--scrim` | `rgba(8, 7, 6, 0.72)` | `rgba(30, 28, 24, 0.4)` | Modal and confirm overlay |
+| `--shadow-pop` | `0 12px 32px rgba(0, 0, 0, 0.45)` | `0 12px 32px rgba(30, 28, 24, 0.14)` | More menu and listbox shadow |
+
+Accent split: `--accent` fills, `--accent-ink` draws. They are the same amber in dark; in light the fill stays bright and the ink darkens to `#8F5400` so amber text and focus rings stay legible on paper. Text on a fill always uses `--on-accent`.
 
 ### 6.2 Role color assignment
 
-- **Hero** `THE HERO` — green, 2 px top stripe.
-- **Villain** `THE VILLAIN` — red, 2 px top stripe.
-- **Squad / Setting / Obstacles** — `--text-primary` heading, no stripe.
-- **WEAK / TRAUMA / WHEN / WHERE labels** — `--text-secondary` (demoted from amber in phase 12).
+- **Hero** "The Hero": green heading, no stripe.
+- **Villain** "The Villain": red heading, no stripe.
+- **Squad / Setting / Obstacles**: `--text-primary` heading.
+- **WEAK / TRAUMA / WHEN / WHERE labels**: `--text-secondary`, mono caps.
+- **`>` prompts**: `--accent-ink`.
+- **Lock**: neutral (`--lock-ink`, `--lock-tint`, `--lock-border`), never amber.
 
 ### 6.3 Spacing scale
 
@@ -479,7 +494,7 @@ Arrow-key navigation, Home/End, Escape to close, click outside to close. `aria-h
 
 ```
 --radius-none 0px
---radius-sm   4px
+--radius-sm   6px
 --radius-md   8px
 --radius-lg   12px
 --radius-xl   24px
@@ -487,21 +502,26 @@ Arrow-key navigation, Home/End, Escape to close, click outside to close. `aria-h
 
 ### 6.5 Typography
 
-Two families:
+One family pair, both Atkinson Hyperlegible from Google Fonts (Human's web body face and its mono sibling):
 
-- `--font-display`: `'Space Grotesk', system-ui, sans-serif` — titles, logo.
-- `--font-body`: `'Space Mono', 'Courier New', monospace` — everything else.
+- `--font-body`: `'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif`. Everything you read: traits, logline, card titles, buttons, modals.
+- `--font-mono`: `'Atkinson Hyperlegible Mono', ui-monospace, 'SF Mono', Menlo, monospace`. Terminal scaffolding only: the wordmark (intro title, top-bar title, present-view brand, worksheet title line), the `>` trait prompts (in accent ink), the WEAK / TRAUMA / WHEN / WHERE labels (caps, no letter-spacing), `kbd` and the share-code input.
+- `--font-display`: `var(--font-mono)`. Used for the wordmark.
+
+Space Grotesk and Space Mono are gone. There is no uppercase-plus-letter-spacing anywhere; the only caps in the UI are the four field labels (and the plain-text export, §4.9). The only tracking left is `-0.01em` on `.text-display`.
 
 Type scale is HIG-aligned:
 
 | Class | Size | HIG role |
 |---|---|---|
-| `.text-display` | `clamp(1.75rem, 5.5vw, 2.5rem)` | Title1 → Large Title |
-| `.text-heading` | `1.25rem` | Title3 (20 pt) |
-| `.text-subheading` | `1.0625rem` bold uppercase | Headline (17 pt) |
+| `.text-display` | `clamp(2rem, 6vw, 3rem)`, weight 700, mono | Title1 → Large Title |
+| `.text-heading` | `1.25rem`, weight 700 | Title3 (20 pt) |
+| `.text-subheading` | `1.0625rem`, weight 600 | Headline (17 pt) |
 | `.text-body` | `1.0625rem` | Body (17 pt) |
 | `.text-caption` | `0.8125rem` | Footnote (13 pt) |
 | `.text-micro` | `0.6875rem` | Caption2 (11 pt) |
+
+Card titles are 20 px at weight 700; the logline is 19 to 23 px at weight 500 (§4.7).
 
 ### 6.6 Iconography
 
@@ -523,33 +543,38 @@ Notable icon choices:
 
 ### 6.7 Focus indicators
 
-Global `:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }`. Skip link materializes on focus.
+Global `:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }` (amber on dark, the darker amber on paper). Skip link materializes on focus.
 
 ---
 
 ## 7. Animations & Motion
 
-All animations respect `prefers-reduced-motion: reduce` — the global rule overrides animation-duration to 0.01 ms and collapses transitions. Several effects (CRT scanlines, die fizzle, shake, trait glow, card pulse) are explicitly disabled. The CRT scanline overlay is also disabled under `prefers-contrast: more`.
+One motion system. Every duration and easing in `styles.css` comes from tokens in `:root`: `--ease-out` `cubic-bezier(0.2, 0, 0, 1)` (things arriving decelerate), `--ease-in-out` `cubic-bezier(0.4, 0, 0.2, 1)`, `--ease-spring` `cubic-bezier(0.34, 1.32, 0.64, 1)` (the die lands with a little overshoot), `--dur-fast` 120 ms, `--dur-base` 220 ms, `--dur-slow` 360 ms and `--stagger` 28 ms. All transitions use them.
 
-| Animation | Duration | Where it fires |
+The signature gesture is **text-enter**: new text is dealt in with a fade and a 4 px rise (`@keyframes text-enter`, `--dur-base`, `--ease-out`, `both`), delayed by `calc(var(--i, 0) * var(--stagger))`. `renderCards()` numbers the changed rows in reading order (`--i`), and `presentSectionHtml()` does the same for the present view. It is the only effect on changed text; there is no fizzle, glow, scan or pulse.
+
+All animations respect `prefers-reduced-motion: reduce`: a global rule sets `animation-duration` and `transition-duration` to 0.01 ms, `animation-iteration-count` to 1 and `animation-delay` to 0 (so the stagger collapses too), and a few components additionally set `transition: none` (chevrons, undo label). The FLIP height animation is skipped outright (`prefersReducedMotion()` in `app.js`).
+
+| Animation | Duration / easing | Where it fires |
 |---|---|---|
-| `die-float` | 3 s loop | Idle vertical bob on the intro die |
-| `glow-pulse` | 4 s loop | Cyan drop-shadow pulse on the intro die |
-| `die-fizzle` | 260 ms, 8-step | CRT static on the intro die face; every 3rd face swap |
-| `die-shake` | 110 ms loop | While `isRolling` is true |
-| `tumble-{x,x-neg,y,y-neg,diag}` | 650 ms | Top-bar "roll all" tumble; random pick avoids immediate repeats |
-| `trait-fizzle` + `trait-fizzle-scan` | 460 ms, 10-step | Applied only to traits whose text changed between renders |
-| `trait-glow` | 550 ms | Cyan text-shadow pulse on the same trait rows that fizzle |
-| `crt-boot` | 600 ms cubic-bezier | First-roll transition from intro to results |
-| `logline-fizzle` | 460 ms | When any `LOGLINE_SOURCE_KEYS` state changes |
-| `card-pulse` | 400 ms | Only on section-level re-rolls (not whole-build or trait swap). Role-colored for Hero (green) and Villain (red); cyan otherwise |
-| Lock border / ring transition | 150 ms | Trait-row border and card ring fade in/out on lock toggle |
-| Card collapse | 300 ms | `grid-template-rows` `0fr → 1fr` plus a 250 ms opacity fade on `.card-content` |
-| Chevron rotation | 200 ms | Card disclosure expand/collapse |
-| Undo label fade | 200 ms | Floating "Undo" pill under the top-bar Undo button fades in/out (opacity + 4 px slide). Absolutely positioned, so no layout shift |
-| Scanline overlay | static | `body::before` linear-gradient at `100% 3px`, 0.06 alpha, `mix-blend-mode: multiply` (disabled under reduced motion + prefers-contrast more) |
+| `die-float` | 4 s loop, `--ease-in-out` | Idle 4 px vertical float on the intro die. The die carries one still warm drop-shadow halo (no pulse) |
+| Die face swap | none | Idle cycle and roll swap faces with no effect; the tumble carries the motion |
+| `tumble-{x,x-neg,y,y-neg,diag}` | 700 ms, `--ease-spring` | Die tumble on a roll; random pick avoids immediate repeats. Content swaps at 300 ms |
+| `text-enter` via `.trait-enter` | `--dur-base`, `--ease-out`, staggered | On the text, `>` prefix or label of rows whose text changed between renders |
+| `text-enter` via `.logline-enter` | same | When any `LOGLINE_SOURCE_KEYS` state changes |
+| `text-enter` via `.present-enter` | same | Changed rows and a changed logline in the present view |
+| FLIP card height | 360 ms, `--ease-out` | `renderCards()` records each card's height, re-renders, then animates the card from the old height to the new one with the Web Animations API (only when a height changed by more than 1 px and a trait changed), so cards glide when a re-roll changes text length. Skipped under reduced motion |
+| `crt-boot` | 600 ms, `--ease-out` | First-roll transition from intro to results (kept as the one CRT nod) |
+| Modals and confirm dialog | overlay `--dur-base`, panel `--dur-slow` | The scrim fades and the panel lifts (8 px, scale .985 to 1), using `@starting-style` and `transition-behavior: allow-discrete` so they animate out of `display: none` with no JS. A closing overlay or menu gets `pointer-events: none` at once, so it never catches the next click while it fades (Chrome already skips it; Safari may not) |
+| More menu, mood listbox | `--dur-fast` opacity, `--dur-base` transform | Fade and drop 4 px (scale .98 to 1) the same way |
+| Lock tint / card border | `--dur-base` | Row background and card border fade on lock toggle |
+| Card collapse | `--dur-slow`, `--ease-out` | `grid-template-rows` `0fr → 1fr` plus a `--dur-base` opacity fade on `.card-content` |
+| Chevron rotation | `--dur-base` | Card disclosure expand/collapse |
+| Undo label fade | `--dur-base` | Floating "Undo" pill under the top-bar Undo button fades in/out (opacity + 4 px slide). Absolutely positioned, so no layout shift |
 
-The fizzle diff uses `snapshotTraitTexts(state)` to build a flat `{ "sectionKey:traitPath": text }` map, compared to the previous render's snapshot. First render (no prior snapshot) skips fizzle entirely because `crt-boot` already carries the animation weight.
+Removed in the redesign: the CRT scanline body overlay (both themes), the wordmark text-shadow glow, `glow-pulse`, `die-fizzle`, `die-shake`, `trait-fizzle`, `trait-fizzle-scan`, `trait-glow`, `logline-fizzle`, `present-fizzle`, `card-pulse` and its `pulseAfterRender` queue.
+
+The row diff still uses `snapshotTraitTexts(state)` to build a flat `{ "sectionKey:traitPath": text }` map, compared to the previous render's snapshot. First render (no prior snapshot) animates no rows because `crt-boot` already carries the animation weight.
 
 ---
 
@@ -559,9 +584,9 @@ Breakpoints:
 
 | Width | Changes |
 |---|---|
-| `< 360 px` | Trait text and card titles tighten (1 rem, less letter-spacing); title shrinks to 13 px; card-header buttons drop to 32×32 (even on coarse pointers) |
+| `< 360 px` | Trait text drops to 1 rem; card titles to 1.125 rem; the top-bar title to 15 px; card-header buttons drop to 32×32 (even on coarse pointers) |
 | `≤ 480 px` | Mood combobox takes full row via `flex: 1 1 100%`. Pinned builds panel goes to one column |
-| `≤ 600 px` | Phone layout: top-bar Roll and Undo are hidden, the fixed bottom action bar (Undo + Roll) appears, the top-bar title shrinks to 14 px. Trait text 1 rem, tighter card padding. Footer and toast make room for the bar |
+| `≤ 600 px` | Phone layout: top-bar Roll and Undo are hidden, the fixed bottom action bar (Undo + Roll) appears, the top-bar title shrinks to 16 px. Trait text 1 rem, tighter card padding. Footer and toast make room for the bar |
 | `≥ 600 px` | Pinned builds panel is 3 columns; wider page gutters |
 | `< 1024 px` | Cards can collapse: view toggle and card chevrons are shown (tablets included). Single-column cards. Left-handed menu item available |
 | `≥ 1024 px` | 2-column grid with Setting full-width on top. Cards permanently expanded; `.view-toggle`, card summaries, chevrons and the left-handed menu item are hidden |
@@ -632,12 +657,11 @@ Implemented via `modalFocusStack`, `openModal()`, `closeModal()`, `trapTab()`, `
 - 36×36 on fine pointers for the top-bar icons and in-card buttons, a deliberate density trade-off where precision input makes it safe. Below 360 px the card-header buttons drop to 32×32.
 - Trait actions are always visible on `hover: none` devices (they are the "lock what you love" mechanic and touch has no hover to reveal them).
 - `-webkit-tap-highlight-color: transparent` on the die.
-- `prefers-reduced-motion: reduce` disables scanline overlay, die shake, fizzle animations, card pulse scale, trait glow, chevron rotation, undo label transition.
-- `prefers-contrast: more` additionally disables the scanline overlay.
+- `prefers-reduced-motion: reduce` collapses every animation and transition to 0.01 ms with no delay (so the text-enter stagger and the die float and tumble effectively stop), turns off chevron rotation and the undo label transition, and skips the FLIP card-height animation (§7). There is no scanline overlay to disable, so no `prefers-contrast` handling is needed.
 
 ### 9.6 Contrast
 
-All text tokens meet WCAG AA against their paired bg in both themes (`--text-tertiary` bumped in the revision 1 audit from `#4A5568` to `#737B85` to pass). Villain red, amber lock, hero green, and secondary grey verified at 4.5:1+ against card bg. Lighthouse accessibility score: **100/100** on both desktop and mobile (measured in revision 1, not re-run since).
+The redesigned palette is built so text tones meet WCAG AA (4.5:1) against every surface (`--bg-primary`, `--bg-secondary`, `--bg-elevated` and `--bg-overlay`) in both themes: primary, secondary and tertiary text, `--accent-ink` (`#FFB224` dark, `#8F5400` light), hero green, villain red and `--lock-ink`, and `--on-accent` on the amber fill. The lowest pair is light hero green on `--bg-overlay` at 4.61:1, computed from the token values. Lighthouse accessibility score: **100/100** on both desktop and mobile (measured in revision 1, not re-run since).
 
 ### 9.7 Keyboard shortcuts
 
@@ -693,17 +717,19 @@ Shake to roll is a **More-menu toggle**, shown only where `DeviceMotionEvent` ex
 |---|---|
 | `init()` | Entry point; wires up all listeners, applies prefs, restores the saved build, then checks the URL hash |
 | `applyPrefs()` / `loadPrefs()` / `savePrefs()` | Preferences read/write with fallback defaults |
+| `setThemeAttr()` | Sets `data-theme` and keeps `<meta name="theme-color">` in sync (`#0F0E0C` dark, `#F5F2EA` light); used by `applyPrefs()` and `toggleTheme()` |
+| `prefersReducedMotion()` | `matchMedia` check that gates the FLIP height animation |
 | `sanitizeBuild()` / `sanitizeTrait()` | Validate any build from outside (hash, pasted code, `localStorage`, pins); §3.3 |
 | `openPresent()` / `closePresent()` / `renderPresent()` / `fitPresent()` | Present view; §4.12 |
 | `buildPrintSheetHtml()` / `preparePrintSheet()` / `printWorksheet()` | Printable worksheet; §4.13 |
 | `applyMood()` / `selectMood()` | Mood combobox state sync |
-| `getDieFaceSVG()` / `setDieFace()` / `startRollIconCycle()` / `startDieIdleCycle()` | Die rendering + idle cycles |
+| `getDieFaceSVG()` / `setDieFace()` / `startRollIconCycle()` / `startDieIdleCycle()` | Die rendering (stroke and pips in `--accent-ink`, so the light-theme die keeps 3:1 against the page) + idle cycles; face swaps carry no effect. The first-roll timeout releases `isRolling` in a `finally` |
 | `rollDie()` | Orchestrates the full roll animation + state update |
 | `generateNightmare()` / `createBuildState()` | Produces a build state, respecting locks |
 | `rerollSection(key)` | Section-scoped re-roll |
 | `rerollSingleTrait(key, type, index?)` | Single-trait swap, avoiding duplicates |
 | `getWeightedItems()` / `shuffleAndPick()` / `pickOne()` | Mood-weighted random selection |
-| `renderCards()` | Imperative DOM render of the `SECTIONS` cards with fizzle diffing + card-pulse queue |
+| `renderCards()` | Imperative DOM render of the `SECTIONS` cards; diffs against the last snapshot so only changed rows get `.trait-enter` (numbered with `--i` in reading order), and runs the FLIP height animation |
 | `setCardExpanded()` / `toggleCardExpand()` | Collapse state (`expanded` class, `inert`, chevron ARIA); collapse only below 1024 px (`COLLAPSE_MQ`) |
 | `renderLogline()` / `buildLoglineText()` / `copyLogline()` / `capitalize()` / `sentence()` | Logline rendering (sentence-cased) + clipboard |
 | `snapshotTraitTexts()` | Flattens state to a key→text map for diffing |
@@ -723,7 +749,7 @@ Shake to roll is a **More-menu toggle**, shown only where `DeviceMotionEvent` ex
 | `loadPins()` / `savePins()` / `pinCurrentBuild()` / `pinCurrentToSlot()` / `replaceSlot()` / `loadPin()` / `findPinnedSlot()` / `pinSubtitle()` / `startRenamePin()` / `confirmDeletePin()` / `executePinDelete()` / `renderPinnedSlots()` / `renderPinSlot()` / `openPinnedPanel()` / `closePinnedPanel()` / `cancelReplaceMode()` | Pinned builds system |
 | `openMoreMenu()` / `closeMoreMenu()` / `toggleMoreMenu()` / `handleMenuAction()` / `updateMoreMenuState()` / `initMoreMenu()` | More overflow menu |
 | `shakeSupported()` / `shakeNeedsPermission()` / `requestMotionPermission()` / `toggleShake()` / `initShakeDetection()` / `handleMotion()` / `setShakeListening()` | Shake-to-roll toggle and listener |
-| `openShortcutsPanel()` / `closeShortcutsPanel()` / `initShortcuts()` | Keyboard shortcuts |
+| `openShortcutsPanel()` / `closeShortcutsPanel()` / `initShortcuts()` | Keyboard shortcuts. Auto-repeat (`e.repeat`) is ignored, so a held key fires once |
 | `openModal()` / `closeModal()` / `trapTab()` / `getFocusable()` / `initModalFocusTrap()` | Modal focus manager |
 | `toggleMoodListbox()` / `openMoodListbox()` / `closeMoodListbox()` / `initMoodCombobox()` | Custom mood combobox |
 | `showToast()` / `announce()` | Visible toast + silent sr-only announcer |
@@ -740,15 +766,15 @@ From `index.html`:
 
 - `<title>`: "Pocket Dystopia"
 - `<meta name="description">`: "Roll a satirical dystopian story seed. Lock traits, re-roll sections, share your build."
-- `<meta name="theme-color">`: `#080A0D`
+- `<meta name="theme-color">`: `#0F0E0C` in the HTML, then rewritten by `setThemeAttr()` to match the active theme (`#F5F2EA` in light)
 - `<meta name="viewport">` includes `viewport-fit=cover` for the phone action bar's safe-area padding.
-- Favicons: .ico (multi-size), 16 / 32 / 192 / 512 PNG, `apple-touch-icon.png` (180×180).
-- `<link rel="manifest" href="manifest.webmanifest">`: `name` "Pocket Dystopia", `short_name` "Dystopia", `display: standalone`, `start_url`/`scope` `/`, background and theme colour `#080A0D`, the 192 and 512 icons.
+- Favicons: .ico (16 and 32), 16 / 32 / 192 / 512 PNG, `apple-touch-icon.png` (180×180). All are rendered from `tools/icon.html` by `node tools/render-icons.mjs` (uses the Playwright under `tests/` and the system Chrome for the PNGs, and ImageMagick's `magick` to pack `favicon.ico`).
+- `<link rel="manifest" href="manifest.webmanifest">`: `name` "Pocket Dystopia", `short_name` "Dystopia", `display: standalone`, `start_url`/`scope` `/`, background and theme colour `#0F0E0C`, the 192 and 512 icons.
 - Open Graph: title, description, `og:image` (1200×630), `og:url` `https://pocketdystopia.forhuman.ca/`.
 - Open Graph also sets `og:image:alt` and `og:type` `website`.
 - Twitter: `summary_large_image`, plus `twitter:title`, `twitter:description` and `twitter:image` (as `name=` attributes).
 
-The OG image is `og-image-v3.png`: the glowing die beside the title, the pitch, a sample seed with the hero in green and the villain in red, and the URL. Its source is `tools/og-image.html`; regenerate with `node tools/render-og.mjs og-image-vN.png` with a new N (the script refuses anything else; uses the Playwright under `tests/` and the system Chrome), then point the meta tags at it — platforms cache previews by URL.
+The OG image is `og-image-v4.png` (v3 retired and removed): the amber die beside the title-case "Pocket Dystopia" wordmark with its cursor block, the pitch, a sample seed with the hero in green, and the URL, set in Atkinson Hyperlegible. Its source is `tools/og-image.html`; regenerate with `node tools/render-og.mjs og-image-vN.png` with a new N (the script refuses anything else; uses the Playwright under `tests/` and the system Chrome), then point the meta tags at it — platforms cache previews by URL.
 
 ---
 
@@ -756,10 +782,10 @@ The OG image is `og-image-v3.png`: the glowing die beside the title, the pitch, 
 
 - **`data.js` is append-only.** v2 share codes store pool indices, so reordering, inserting or deleting an entry silently rewrites every previously shared link. Add at the end of a pool, retire by editing text in place, keep each pool under 256 entries. A content edit to an existing entry changes what old links show (by design: it is the same slot), so edit for wording, not meaning.
 - **No framework / no bundler**: `data.js` and `app.js` are global-scoped scripts. Cohesion is maintained via comment banners rather than module boundaries.
-- **Imperative DOM rendering**: `renderCards()` rewrites `innerHTML` on every state change. Fine at this scale; the fizzle diff prevents re-animating unchanged rows. Safe only because every interpolated string goes through `escapeHtml()` and every external build through `sanitizeBuild()`.
+- **Imperative DOM rendering**: `renderCards()` rewrites `innerHTML` on every state change. Fine at this scale; the snapshot diff prevents re-animating unchanged rows, and the FLIP height animation hides the jump when a card's height changes. Safe only because every interpolated string goes through `escapeHtml()` and every external build through `sanitizeBuild()`.
 - **`document.execCommand('copy')` fallback**: legacy path inside `copyText()` when `navigator.clipboard` is missing or rejects.
 - **Icon subset is a manual list**: a new Material Symbols icon must be added (alphabetically) to the `icon_names` list in `index.html`, or it shows its ligature name.
-- **Share image needs the fonts loaded**: `renderShareImage()` waits on `document.fonts.load`, but offline with no cached Space Mono / Space Grotesk it falls back to system fonts.
+- **Share image needs the fonts loaded**: `renderShareImage()` waits on `document.fonts.load`, but offline with no cached Atkinson Hyperlegible Mono / Next it falls back to system fonts.
 - **Legacy v1 links remain valid**: they carry free text, so they are accepted only after passing `sanitizeBuild()`, which requires every trait to be real `DATA` text. `data.js` has not changed since the first commit, so every genuine old link still loads.
 - **Left-handed mode does not mirror the top bar**: deliberate. The top is out of thumb reach in either hand, and mirroring it reversed reading and tab order. Only the action bar, card-header actions and trait actions flip. Inside a card the `row-reverse` / `order: -1` mirroring means visual order differs from DOM (tab) order for those buttons; accepted, since thumb-proximate is what the user asked for and it no longer affects the top bar.
 - **Shake is opt-in on iOS**: the permission prompt needs a user gesture, so it is behind a menu toggle rather than automatic.
@@ -781,11 +807,11 @@ The OG image is `og-image-v3.png`: the glowing die beside the title, the pitch, 
 
 Smoke path to verify the build end-to-end:
 
-1. Hard reload intro → idle die cycles, 2-line subtitle, collapsed "Have a build code?" disclosure, no resume row, credit footer in flow below.
-2. Click die → shake, CRT boot, 5 cards render in the order Setting, Hero, Villain, Squad, Obstacles with a sentence-cased logline above them. Hero green + top stripe, Villain red + top stripe. At ≥ 1024 px Setting spans the full width.
-3. Lock a trait → amber left border. Re-roll that section → locked trait stays put. Card pulses briefly (cyan for non-role cards, role color for Hero/Villain).
-4. Lock an entire section → amber ring + glow; section re-roll and every trait swap/lock inside it are disabled ("Card is locked").
-5. Swap a single trait via the row-level swap button → just that trait changes, row fizzles and glows, logline re-renders only if the swapped trait is a source key.
+1. Hard reload intro → amber die floats and cycles faces (no glow pulse or fizzle), "Pocket Dystopia" wordmark with a static amber block cursor, 2-line subtitle, collapsed "Have a build code?" disclosure, no resume row, credit footer in flow below.
+2. Click die → tumble (about 700 ms, content swaps mid-spin), CRT boot, 5 cards render in the order The Setting, The Hero, The Villain, The Squad, Obstacles (title case, no `>>`) with a sentence-cased logline above them: no box or left rule, larger type than the traits. Hero heading green, Villain heading red, no top stripes. At ≥ 1024 px Setting spans the full width.
+3. Lock a trait → filled lock icon and a faint neutral row tint, no amber and no left border. Re-roll that section → locked trait stays put; changed rows fade in and rise 4 px in reading order, and the card glides to its new height. The toast on the first lock reads "Locked. It'll survive your next roll."
+4. Lock an entire section → the card border turns to the neutral lock border and its lock fills, with no ring or glow; rows inside are not tinted; section re-roll and every trait swap/lock inside it are disabled ("Card is locked").
+5. Swap a single trait via the row-level swap button → just that trait changes and its text fades in (no fizzle or glow), the logline animates in only if the swapped trait is a source key.
 6. Switch mood via the custom combobox → unlocked traits re-shuffle and a toast says "Re-rolled for <mood>. Locks kept."
 7. Toggle view below 1024 px (phone and tablet) → compressed shows the first trait plus a muted "+N more", chevrons collapse and expand each card, collapsed buttons can't be tabbed to. At 320 px the Hero card is never clipped.
 8. Open the More menu → Light/Dark, Left-handed (below 1024 px), Shake to roll (touch devices only), Keyboard shortcuts, divider, Clear this build. The menu stays on screen on a 390 px phone in both handedness modes.
@@ -793,20 +819,20 @@ Smoke path to verify the build end-to-end:
 10. Press `R`, `Z`, `3`, `C`, `S`, `P`, `L` and verify each shortcut fires (`3` re-rolls Villain; `P` pins immediately with a toast).
 11. Undo → reverts last roll. The floating "Undo" label appears under the top-bar button the first time it becomes available, with no layout shift.
 12. Copy (from share modal or `C` shortcut) → clipboard contains the text build with logline and a share URL. Icon briefly flashes green check.
-13. Save as image (from share modal) → a 1080×1350 PNG with title, logline and five sections, no UI controls. On a phone it opens the share sheet.
+13. Save as image (from share modal) → a 1080×1350 PNG with the title-case wordmark and amber cursor block, the logline (no rule), and five sections with `>` prompts in amber, no UI controls. On a phone it opens the share sheet.
 14. Share → modal shows Copy link as primary, Web Share API if available, Or share as code disclosure. The link is `…/#b=` plus ~28 characters. Copy link → URL loads on fresh tab with no intro and no hash in address bar; with a build already saved, a toast offers Undo and Undo restores it. Corrupt the hash → toast fires after ~300 ms. A legacy `#build=` link still loads. A crafted link with markup in a trait doesn't execute.
 15. Paste a full link (or a bare code) into the intro's load box and press Enter → loads. Garbage → the "That code didn't work" message.
 16. Tap Pin icon → panel opens with a "Pin this build" button and 6 slots. Pin, then the button reads "Pinned in slot N" and is disabled; pins show the setting as a second line and the current one is highlighted. Rename (Escape cancels only the rename), delete (confirm dialog traps focus), load (undoable). Fill all 6 then press `P` → replace mode. At ≤ 480 px the slots are one column.
 17. Tap the title → intro with resume row if a saved build exists. Resume or Clear it.
 18. Clear this build (from More menu) → confirm dialog with "Clear it" destructive button. Pins and prefs persist after clear.
-19. Toggle theme via More menu → palette swaps including all role colors. Reload → theme persists.
+19. Toggle theme via More menu → palette swaps between warm near-black and warm paper, including all role colors, and the browser theme colour follows. Reload → theme persists. With `prefers-reduced-motion` on, rolls show no stagger and no height glide.
 20. At ≤ 600 px → bottom bar with Undo and Roll, top bar shows title + share/pin/more, toast and footer clear of the bar. Toggle left-handed → bar mirrors (Roll on the left), card-header and trait buttons move left, top bar stays in the same order.
 21. Switch Shake to roll on in the More menu on a phone (grant motion permission on iOS when prompted) and shake → triggers a roll. Switch off → no longer rolls.
-22. Press `F` → present view goes fullscreen and fits the screen; `R`/Space/PageDown roll, `Z`/PageUp undo, `2` re-rolls the Hero, `S`/`P`/`?` do nothing; locked cards show an amber lock. Esc (or `F`) exits and focus returns.
-23. More → Print worksheet → print preview shows only the worksheet (build, Name/Date, six prompts with ruled lines, share URL), black on white. Cmd+P from the intro prints the page itself.
+22. Press `F` → present view goes fullscreen and fits the screen; `R`/Space/PageDown roll, `Z`/PageUp undo, `2` re-rolls the Hero, `S`/`P`/`?` do nothing; locked cards show a neutral filled lock and held rows a faint tint (no left rule). Esc (or `F`) exits and focus returns.
+23. More → Print worksheet → print preview shows only the worksheet (build, Name/Date, six prompts with ruled lines, share URL), black on white, title-case section headings, no rule beside the logline. Cmd+P from the intro prints the page itself.
 24. Reload the page after any of the above → state restores exactly.
 
-**Verification status (2026-10-13).** Steps 1–20 and 22–24 were exercised in automated Chrome (desktop, 820 px touch tablet, 390 and 320 px touch phones) and by the e2e suite, against both the local server and production. The phone-only behaviours that need real hardware — iOS motion permission and shake (21), the image share sheet into Photos (13), the action bar clearing the iPhone home indicator (20), and links opened from iMessage/WeChat — were not tested on a device; the operator accepted them as working at close of the revision 2 session. Present view on a real projector and the worksheet on a real printer remain an open operator check in `_meta`.
+**Verification status (2026-10-13, before the visual and motion redesign).** Steps 1–20 and 22–24 were exercised in automated Chrome (desktop, 820 px touch tablet, 390 and 320 px touch phones) and by the e2e suite, against both the local server and production. The phone-only behaviours that need real hardware — iOS motion permission and shake (21), the image share sheet into Photos (13), the action bar clearing the iPhone home indicator (20), and links opened from iMessage/WeChat — were not tested on a device; the operator accepted them as working at close of the revision 2 session. Present view on a real projector and the worksheet on a real printer remain an open operator check in `_meta`. This status predates the 2026-10-14 redesign: the steps it changed (1 to 5, 13, 19, 22, 23) were re-checked by screenshot in automated Chrome (1440×900 and 390×844, both themes, mid-roll frames, present view at 1280×720, worksheet as PDF), and the e2e suite gained a reduced-motion test (nothing left animating after a re-roll; proven to fail without the guard).
 
 ### Accessibility check
 
@@ -814,5 +840,4 @@ Smoke path to verify the build end-to-end:
 - All interactive elements keyboard-reachable; focus visible on every button.
 - Modals trap focus; Escape closes and restores focus to trigger.
 - Screen reader announces lock toggles, logline updates, and toast messages, and no longer re-reads every card on each re-render.
-- Under `prefers-reduced-motion: reduce`, scanlines + motion effects disable.
-- Under `prefers-contrast: more`, the CRT scanline overlay additionally disables.
+- Under `prefers-reduced-motion: reduce`, animations and transitions collapse to 0.01 ms with no stagger delay and the card-height glide is skipped. There is no scanline overlay, so no `prefers-contrast` special case.
