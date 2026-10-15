@@ -180,17 +180,22 @@ test.describe('classroom', () => {
 });
 
 test.describe('motion', () => {
-  test('reduced motion: a re-roll leaves nothing animating', async ({ page }) => {
+  test('reduced motion: a re-roll moves nothing (the colour afterglow may run)', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await freshRoll(page);
     await page.evaluate(() => rollDie());
     // The new build lands ~300ms in; the card-height glide would run 360ms
     // from there, so this samples mid-glide.
     await page.waitForTimeout(450);
-    const running = await page.evaluate(() => document.getAnimations()
+    // Anything that moves or resizes must be off; the amber afterglow is a
+    // colour fade and deliberately stays (it shows what changed).
+    const moving = await page.evaluate(() => document.getAnimations()
       .filter(a => a.playState === 'running' && a.effect?.target?.closest?.('#results-container, #logline-container'))
+      .filter(a => a.effect.getKeyframes().some(k => 'transform' in k || 'height' in k))
       .length);
-    expect(running).toBe(0);
+    expect(moving).toBe(0);
+    // And the afterglow did run, so a change is still visible.
+    expect(await page.locator('.trait-enter').count()).toBeGreaterThan(0);
   });
 
 });
